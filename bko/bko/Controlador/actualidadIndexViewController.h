@@ -7,7 +7,13 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "ALRadialMenu.h"
 
-@interface actualidadIndexViewController : UIViewController
+@interface actualidadIndexViewController : UIViewController <ALRadialMenuDelegate>
+
+@property (strong, nonatomic) ALRadialMenu *radialMenu;
+- (IBAction)menuButton:(id)sender;
+@property (weak, nonatomic) IBOutlet UIView *MenuView;
+@property (weak, nonatomic) IBOutlet UIView *MainView;
 
 @end
