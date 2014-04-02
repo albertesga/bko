@@ -7,12 +7,28 @@
 //
 
 #import "registerAppDelegate.h"
+#import "AFNetworkActivityIndicatorManager.h"
 
 @implementation registerAppDelegate
 
+#define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
+
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-    // Override point for customization after application launch.
+    //Cambiamos el aspecto del topbar para que siempre sea igual
+    NSShadow *shadow = [[NSShadow alloc] init];
+    shadow.shadowColor = [UIColor colorWithRed:0.0 green:0.0 blue:0.0 alpha:0.8];
+    shadow.shadowOffset = CGSizeMake(0, 1);
+    [[UINavigationBar appearance] setTitleTextAttributes: [NSDictionary dictionaryWithObjectsAndKeys:
+                                                           [UIColor colorWithRed:245.0/255.0 green:245.0/255.0 blue:245.0/255.0 alpha:1.0], NSForegroundColorAttributeName,
+                                                           shadow, NSShadowAttributeName,
+                                                           [UIFont fontWithName:@"BebasNeue" size:21.0], NSFontAttributeName, nil]];
+    
+    [[UINavigationBar appearance] setBarTintColor:[UIColor blackColor]];
+    
+    //Parámetro que permite dejar de controlar el indicador de la conexión
+    [[AFNetworkActivityIndicatorManager sharedManager] setEnabled:YES];
+    
     return YES;
 }
 							
