@@ -5,9 +5,13 @@
 //  Created by Tito Español Gamón on 20/03/14.
 //  Copyright (c) 2014 bko. All rights reserved.
 //
-
+#import <FacebookSDK/FacebookSDK.h>
 #import "registerAppDelegate.h"
 #import "AFNetworkActivityIndicatorManager.h"
+#import "utils.h"
+#import "revealViewController.h"
+#import "registerViewController.h"
+#import "register_dao.h"
 
 @implementation registerAppDelegate
 
@@ -29,7 +33,40 @@
     //Parámetro que permite dejar de controlar el indicador de la conexión
     [[AFNetworkActivityIndicatorManager sharedManager] setEnabled:YES];
     
+    //Controlamos, si no tiene acceso lo llevamos al registro, si tiene le hacemos login automáticamente y le llevamos a la página de actualidad
+    /*UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+    if(![utils userAllowedToUseApp]){
+        registerViewController *viewController = [storyboard instantiateViewControllerWithIdentifier:@"registerViewController"];
+        self.window.rootViewController = viewController;
+    }else{
+        [[register_dao sharedInstance] login:[[utils retriveUsernamePassword] objectForKey:@"username"] password:[[utils retriveUsernamePassword] objectForKey:@"password"] y:^(NSArray *connection, NSError *error) {
+            if (!error) {
+                //Debemos hacer likes automáticos en el registro a través de facebook
+                UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+                revealViewController *actualidad =
+                [storyboard instantiateViewControllerWithIdentifier:@"revealViewController"];
+                self.window.rootViewController = actualidad;
+            } else {
+                // Error processing
+                NSLog(@"Error en la llamada del registro: %@", error);
+            }
+        }];
+    }*/
+    
     return YES;
+}
+
+- (BOOL)application:(UIApplication *)application
+            openURL:(NSURL *)url
+  sourceApplication:(NSString *)sourceApplication
+         annotation:(id)annotation {
+    
+    // Call FBAppCall's handleOpenURL:sourceApplication to handle Facebook app responses
+    BOOL wasHandled = [FBAppCall handleOpenURL:url sourceApplication:sourceApplication];
+    
+    // You can add your app-specific url handling code here if needed
+    
+    return wasHandled;
 }
 							
 - (void)applicationWillResignActive:(UIApplication *)application
@@ -58,5 +95,7 @@
 {
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
 }
+
+
 
 @end
