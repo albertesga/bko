@@ -7,6 +7,7 @@
 //
 
 #import "fichaViewController.h"
+#import "SWRevealViewController.h"
 
 @interface fichaViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *titulo_barra_superior;
@@ -17,6 +18,7 @@
 @property (weak, nonatomic) IBOutlet UIButton *quitar_button;
 @property (weak, nonatomic) IBOutlet UIView *ya_no_te_gusta_modal;
 @property (weak, nonatomic) IBOutlet UIView *anadido_modal;
+@property (weak, nonatomic) IBOutlet UIBarButtonItem *menu_lateral_button;
 
 @end
 
@@ -40,6 +42,12 @@
     _nombre_ficha.font = FONT_BEBAS(18.0f);
     _tipo_ficha_label.font = FONT_BEBAS(15.0f);
     _info_label.font = FONT_BEBAS(15.0f);
+    
+    //Menu Lateral
+    [self.menu_lateral_button setTarget: self.revealViewController];
+    [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
+    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 118;
 }
 - (IBAction)anadir_mis_gustos:(id)sender {
     _anadir_button.hidden=true;
@@ -47,6 +55,9 @@
     _anadido_modal.hidden=true;
     _ya_no_te_gusta_modal.hidden=false;
 
+}
+- (IBAction)back:(UIBarButtonItem *)sender {
+    [self.navigationController popViewControllerAnimated:YES];
 }
 - (IBAction)quitar_mis_gustos:(id)sender {
     _anadir_button.hidden=false;

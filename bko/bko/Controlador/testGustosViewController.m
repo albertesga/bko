@@ -10,6 +10,7 @@
 
 @interface testGustosViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *presiona_label;
+@property (weak, nonatomic) IBOutlet UIView *view_test;
 
 @end
 
@@ -30,6 +31,27 @@
 {
     [super viewDidLoad];
     _presiona_label.font = FONT_BEBAS(14.0f);
+    
+    UIView *paintView=[[UIView alloc]initWithFrame:CGRectMake(15, 35, 140, 140)];
+    [paintView setBackgroundColor:[UIColor clearColor]];
+    [_view_test addSubview:paintView];
+    
+    UIButton *buttonActualidad = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 154, 154)];
+    [buttonActualidad setBackgroundImage:[UIImage imageNamed:@"IMATGE.png"]forState:UIControlStateNormal];
+    [paintView addSubview:buttonActualidad];
+    [buttonActualidad addTarget:self action:@selector(detallesActualidad) forControlEvents:UIControlEventTouchUpInside];
+    
+    UIImageView *imagen_fondo_box = [[UIImageView alloc] initWithFrame:CGRectMake(3, 124, 148, 26)];
+    [imagen_fondo_box setImage:[UIImage imageNamed:@"FONDO_IMAGEN.png"]];
+    [paintView addSubview:imagen_fondo_box];
+    
+    UILabel *tituloActualidad = [[UILabel alloc] initWithFrame:CGRectMake(5, 127, 149, 21)];
+    [paintView addSubview:tituloActualidad];
+    tituloActualidad.text=@"hola";
+    tituloActualidad.textColor=[UIColor whiteColor];
+    tituloActualidad.font = FONT_BEBAS(16.0f);
+    tituloActualidad.textAlignment=NSTextAlignmentCenter;
+    
 }
 
 - (void)didReceiveMemoryWarning

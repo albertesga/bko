@@ -7,11 +7,13 @@
 //
 
 #import "problemasLoginViewController.h"
+#import "backgroundAnimate.h"
 
 @interface problemasLoginViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *problemas_label;
 @property (weak, nonatomic) IBOutlet UILabel *acceder_label;
 @property (weak, nonatomic) IBOutlet UILabel *introduce_campos_label;
+@property (weak, nonatomic) IBOutlet UIImageView *backgroundImageView;
 
 @end
 
@@ -30,6 +32,7 @@
 
 - (void)viewDidLoad
 {
+    
     [super viewDidLoad];
     _problemas_label.font = FONT_BEBAS(18.0f);
     _acceder_label.font = FONT_BEBAS(18.0f);
@@ -41,6 +44,31 @@
 {
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    
+    //Llamamos al Singleton backgroundAnimate y ejecutamos la funcion que anima el background
+    backgroundAnimate *background = [backgroundAnimate sharedInstance];
+    [background animateBackground:self.backgroundImageView];
+    
+    [super viewDidAppear:animated];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillEnterForeground:) name:UIApplicationWillEnterForegroundNotification object:nil];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillEnterForegroundNotification object:nil];
+}
+
+- (void)applicationWillEnterForeground:(NSNotification *)note {
+    backgroundAnimate *background = [backgroundAnimate sharedInstance];
+    [background animateBackground:self.backgroundImageView];
+    [background applyCloudLayerAnimation];
 }
 
 /*

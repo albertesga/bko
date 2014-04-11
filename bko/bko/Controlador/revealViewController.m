@@ -1,20 +1,18 @@
 //
-//  menuController.m
+//  revealViewController.m
 //  bko
 //
-//  Created by Tito Español Gamón on 28/03/14.
+//  Created by Tito Español Gamón on 08/04/14.
 //  Copyright (c) 2014 bko. All rights reserved.
 //
 
-#import "menuController.h"
+#import "revealViewController.h"
 
-@interface menuController ()
+@interface revealViewController ()
 
 @end
 
-@implementation menuController
-
-#define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
+@implementation revealViewController
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
 {
@@ -27,7 +25,6 @@
 
 - (void)viewDidLoad
 {
-    
     [super viewDidLoad];
     // Do any additional setup after loading the view.
 }

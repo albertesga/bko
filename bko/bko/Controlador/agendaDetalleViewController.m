@@ -7,6 +7,7 @@
 //
 
 #import "agendaDetalleViewController.h"
+#import "SWRevealViewController.h"
 
 @interface agendaDetalleViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *agenda_label;
@@ -68,6 +69,9 @@
 }
 - (IBAction)close_share_modal:(id)sender {
     _modal_sorteo.hidden = true;
+}
+- (IBAction)back:(id)sender {
+    [self.navigationController popViewControllerAnimated:YES];
 }
 
 - (IBAction)share_event:(id)sender {

@@ -7,7 +7,12 @@
 //
 
 #import <UIKit/UIKit.h>
+#import <FacebookSDK/FacebookSDK.h>
+#import "utils.h"
 
-@interface registerViewController : UIViewController
+@interface registerViewController : UIViewController <FBLoginViewDelegate>
+
+- (void)loginViewFetchedUserInfo:(FBLoginView *)loginView
+                            user:(id<FBGraphUser>)user;
 
 @end
