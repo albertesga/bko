@@ -8,6 +8,8 @@
 
 #import "Articles.h"
 #import "Contents.h"
+#import "AFHTTPSessionManager.h"
+
 
 
 @implementation Articles
@@ -28,5 +30,6 @@
 @dynamic is_interview;
 @dynamic is_published;
 @dynamic article_content;
+
 
 @end

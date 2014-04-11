@@ -11,6 +11,8 @@
 
 @class Contents;
 
+typedef void (^FetchArticlesCompletionBlock)(NSArray *notes, NSError *error);
+
 @interface Articles : NSManagedObject
 
 @property (nonatomic, retain) NSNumber * id;
@@ -29,5 +31,7 @@
 @property (nonatomic, retain) NSNumber * is_interview;
 @property (nonatomic, retain) NSNumber * is_published;
 @property (nonatomic, retain) Contents *article_content;
+
+
 
 @end

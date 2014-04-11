@@ -15,7 +15,7 @@
 @dynamic party_id;
 @dynamic title;
 @dynamic author;
-@dynamic for;
+@dynamic forWho;
 @dynamic finish_date;
 @dynamic conditions;
 @dynamic reward;

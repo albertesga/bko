@@ -16,7 +16,7 @@
 @property (nonatomic, retain) NSNumber * party_id;
 @property (nonatomic, retain) NSString * title;
 @property (nonatomic, retain) NSString * author;
-@property (nonatomic, retain) NSString * for;
+@property (nonatomic, retain) NSString * forWho;
 @property (nonatomic, retain) NSDate * finish_date;
 @property (nonatomic, retain) NSString * conditions;
 @property (nonatomic, retain) NSString * reward;
