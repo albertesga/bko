@@ -20,5 +20,12 @@
 
 + (NSMutableDictionary *) retriveUsernamePassword;
 
-+ (NSString *) prettyDate:(NSDate *) date;
++ (NSString *) getNameKind:(NSString *) tipo;
++ (int) getKind:(NSString *) tipo;
++ (NSMutableArray*) generarContenidoDescripcion:(NSString*)contenido;
++ (NSMutableArray*)componentsSeparatedByRegex2:(NSString *)pattern string:(NSString *)text;
++ (NSString*)fechaConFormatoAgenda:(NSString*)fecha;
++ (NSString*)fechaConFormatoTituloAgenda:(NSDate*)fecha;
++ (NSString*)fechaConFormatoMensaje:(NSString*)fecha;
++ (NSDate*)stringToDate:(NSString*)fecha;
 @end

@@ -30,7 +30,7 @@ CABasicAnimation *animation;
     background.transform = CATransform3DMakeScale(1, -1, 1);
     background.anchorPoint = CGPointMake(0, 1);
     CGSize viewSize = backgroundImageView.bounds.size;
-    background.frame = CGRectMake(0, 0, viewSize.width,  backgroundImage.size.height +   viewSize.height);
+    background.frame = CGRectMake(0, 0, viewSize.width,  backgroundImage.size.height +   [[UIScreen mainScreen] bounds].size.height);
     [backgroundImageView.layer addSublayer:background];
     
     CGPoint startPoint = CGPointZero;
