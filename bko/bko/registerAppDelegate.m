@@ -12,6 +12,8 @@
 #import "revealViewController.h"
 #import "registerViewController.h"
 #import "register_dao.h"
+#import "message_dao.h"
+#import "sesion.h"
 
 @implementation registerAppDelegate
 
@@ -32,26 +34,6 @@
     
     //Parámetro que permite dejar de controlar el indicador de la conexión
     [[AFNetworkActivityIndicatorManager sharedManager] setEnabled:YES];
-    
-    //Controlamos, si no tiene acceso lo llevamos al registro, si tiene le hacemos login automáticamente y le llevamos a la página de actualidad
-    /*UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
-    if(![utils userAllowedToUseApp]){
-        registerViewController *viewController = [storyboard instantiateViewControllerWithIdentifier:@"registerViewController"];
-        self.window.rootViewController = viewController;
-    }else{
-        [[register_dao sharedInstance] login:[[utils retriveUsernamePassword] objectForKey:@"username"] password:[[utils retriveUsernamePassword] objectForKey:@"password"] y:^(NSArray *connection, NSError *error) {
-            if (!error) {
-                //Debemos hacer likes automáticos en el registro a través de facebook
-                UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
-                revealViewController *actualidad =
-                [storyboard instantiateViewControllerWithIdentifier:@"revealViewController"];
-                self.window.rootViewController = actualidad;
-            } else {
-                // Error processing
-                NSLog(@"Error en la llamada del registro: %@", error);
-            }
-        }];
-    }*/
     
     return YES;
 }
@@ -79,6 +61,47 @@
 {
     // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later. 
     // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+    //Hacemos el login a través del fichero
+    if([utils userAllowedToUseApp]){
+        NSDictionary* user_pass = [utils retriveUsernamePassword];
+        [[register_dao sharedInstance] login:[user_pass objectForKey:@"username"] password:[user_pass objectForKey:@"password"] token:nil y:^(NSArray *connection, NSError *error) {
+            if (!error) {
+                sesion *s = [sesion sharedInstance];
+                NSDictionary* con = [connection objectAtIndex:0];
+                s.codigo_conexion = [[con objectForKey:@"connection"] objectForKey:@"code"];
+                
+                [[message_dao sharedInstance] getUnreadMessagesCount:s.codigo_conexion y:^(NSArray *countMessages, NSError *error) {
+                    if (!error) {
+                        NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
+                        [f setNumberStyle:NSNumberFormatterDecimalStyle];
+
+                        NSDictionary* c = [countMessages objectAtIndex:0];
+                        s.messages_unread = [c objectForKey:@"count"];
+                    } else {
+                        // Error processing
+                        NSLog(@"Error en la llamada del Recoger Mensajes: %@", error);
+                        UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
+                                                                           message:[error localizedDescription]
+                                                                          delegate:self
+                                                                 cancelButtonTitle:@"OK"
+                                                                 otherButtonTitles:nil];
+                        [theAlert show];
+                    }
+                }];
+
+                
+            } else {
+                // Error processing
+                NSLog(@"Error en la llamada del login: %@", error);
+                UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
+                                                               message:[error localizedDescription]
+                                                              delegate:self
+                                                     cancelButtonTitle:@"OK"
+                                                     otherButtonTitles:nil];
+                [theAlert show];
+            }
+        }];
+    }
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application

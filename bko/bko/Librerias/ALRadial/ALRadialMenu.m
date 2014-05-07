@@ -12,7 +12,6 @@
 
 @implementation ALRadialMenu
 
-
 //FIXME: sanity/dedup this
 - (void)itemsWillAppearFromButton:(UIButton *) button withFrame:(CGRect)frame inView:(UIView *)view {
 	if ([self.items count]) {

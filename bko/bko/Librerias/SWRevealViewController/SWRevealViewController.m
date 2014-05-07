@@ -739,8 +739,8 @@ static NSString * const SWSegueRightIdentifier = @"sw_right";
     // of this method, you can load yourself the views explicitly on your overriden method.
     // However we discourage it as an app following the MVC principles should never need to do so
         
-//  [_frontViewController view];
-//  [_rearViewController view];
+  //[_frontViewController view];
+  //[_rearViewController view];
 
     // we store at this point the view's user interaction state as we may temporarily disable it
     // and resume it back to the previous state, it is possible to override this behaviour by
@@ -913,7 +913,7 @@ static NSString * const SWSegueRightIdentifier = @"sw_right";
 
 
 - (void)rightRevealToggle:(id)sender
-{    
+{
     [self rightRevealToggleAnimated:YES];
 }
 
@@ -940,6 +940,7 @@ static NSString * const SWSegueRightIdentifier = @"sw_right";
 
 - (void)_notifyPanGestureBegan
 {
+    NSLog(@"LOL");
     if ( [_delegate respondsToSelector:@selector(revealControllerPanGestureBegan:)] )
         [_delegate revealControllerPanGestureBegan:self];
     
