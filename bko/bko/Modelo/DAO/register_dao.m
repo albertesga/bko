@@ -9,9 +9,10 @@
 #import "register_dao.h"
 #import "AFNetworkActivityIndicatorManager.h"
 #import "Artists.h"
+#import "sesion.h"
 #import "MTLJSONAdapter.h"
 
-static NSString * const daoEngineBaseURL = @"http://192.168.1.41/";
+static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_services/";
 
 @implementation register_dao
 
@@ -42,24 +43,29 @@ static NSString * const daoEngineBaseURL = @"http://192.168.1.41/";
     return _sharedInstance;
 }
 
-- (void)getPossibleArtistsLiked:(FetchCompletionBlock)completionBlock{
+- (void)getPossibleArtistsLiked:(NSString *)code limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchCompletionBlock)completionBlock{
     
     NSString *path = [NSString stringWithFormat:@"getPossibleArtistsLiked"];
-    [self GET:path parameters:@{@"connection_code":@"XXXX",@"limit":@10,@"page":@1}
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(code!=nil){
+        [parameters setObject:code forKey:@"connection_code"];
+    }
+    if(limit!=nil){
+        [parameters setObject:limit forKey:@"limit"];
+    }
+    if(page!=nil){
+        [parameters setObject:page forKey:@"page"];
+    }
+
+    [self GET:path parameters:parameters
        success:^(NSURLSessionDataTask *task, id responseObject) {
-        //Convertimos el objeto responseObject de un NSArray a un NSMutableArray de Artists
            NSDictionary *jsonDict = (NSDictionary *) responseObject;
-           if([[jsonDict objectForKey:@"response"] objectForKey:@"error"]==0){
-               NSMutableArray *articulos = [[NSMutableArray alloc] initWithCapacity:[responseObject count]];
-               for (NSDictionary *JSONnoteData in responseObject) {
-                   Artists *articulo = [MTLJSONAdapter modelOfClass:[Artists class] fromJSONDictionary:JSONnoteData error:nil];
-                   if (articulo) [articulos addObject:articulo];
-               }
-               completionBlock(articulos, nil);
+           if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+               completionBlock([jsonDict objectForKey:@"artists"], nil);
            }
            else{
                int id_error = (int)[[jsonDict objectForKey:@"response"] objectForKey:@"error"];
-               NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+               NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
                completionBlock(nil, error);
            }
     }
@@ -74,19 +80,14 @@ static NSString * const daoEngineBaseURL = @"http://192.168.1.41/";
     NSString *path = [NSString stringWithFormat:@"getAllFacebookArtists"];
     [self GET:path parameters:nil
       success:^(NSURLSessionDataTask *task, id responseObject) {
-          //Convertimos el objeto responseObject de un NSArray a un NSMutableArray de Artists
+
           NSDictionary *jsonDict = (NSDictionary *) responseObject;
-          if([[jsonDict objectForKey:@"response"] objectForKey:@"error"]==0){
-              NSMutableArray *articulos = [[NSMutableArray alloc] initWithCapacity:[responseObject count]];
-              for (NSDictionary *JSONnoteData in responseObject) {
-                  Artists *articulo = [MTLJSONAdapter modelOfClass:[Artists class] fromJSONDictionary:JSONnoteData error:nil];
-                  if (articulo) [articulos addObject:articulo];
-              }
-              completionBlock(articulos, nil);
+          if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+              completionBlock([jsonDict objectForKey:@"artists"], nil);
           }
           else{
               int id_error = (int)[[jsonDict objectForKey:@"response"] objectForKey:@"error"];
-              NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+              NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
               completionBlock(nil, error);
           }
       }
@@ -97,38 +98,76 @@ static NSString * const daoEngineBaseURL = @"http://192.168.1.41/";
 }
 
 - (void)addUser:(NSString *)email name:(NSString *)name surname:(NSString *)surname birthdate:(NSString *)birthdate y:(FetchCompletionBlock)completionBlock{
-    
     NSString *path = [NSString stringWithFormat:@"addUser"];
-    [self POST:path parameters:@{@"email":email,@"name":name,@"surname":name,@"birthdate":birthdate} success:^(NSURLSessionDataTask *task, id responseObject) {
-
+    NSMutableDictionary *parameters = [[NSMutableDictionary alloc] init];
+    if(email!=nil){
+        //TESTING
+        //email = @"fdsdfe40@gmail.com";
+        
+        [parameters setObject:email  forKey:@"email"];
+    }
+    if(name!=nil){
+        [parameters setObject:name forKey:@"name"];
+    }
+    if(birthdate!=nil){
+        [parameters setObject:birthdate forKey:@"birth_date"];
+    }
+    if(surname!=nil){
+        [parameters setObject:surname forKey:@"surnames"];
+    }
+    [self GET:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
         NSDictionary *jsonDict = (NSDictionary *) responseObject;
-        if([[jsonDict objectForKey:@"response"] objectForKey:@"error"]==0){
+
+        if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue] == FALSE){
             NSArray *connection = [[NSArray alloc] initWithObjects:[[jsonDict objectForKey:@"user"] objectForKey:@"password"], nil];
             completionBlock(connection, nil);
         }
         else{
             int id_error = (int)[[jsonDict objectForKey:@"response"] objectForKey:@"error"];
-            NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+            NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
             completionBlock(nil, error);
         }
     } failure:^(NSURLSessionDataTask *task, NSError *error) {
+        NSLog(@"Error");
         completionBlock(nil, error);
     }];
     
 }
 
-- (void)login:(NSString *)email password:(NSString *)password y:(FetchCompletionBlock)completionBlock{
-    
+- (void)login:(NSString *)email password:(NSString *)password token:(NSNumber *)token y:(FetchCompletionBlock)completionBlock{
     NSString *path = [NSString stringWithFormat:@"login"];
-    [self POST:path parameters:@{@"email":email,@"password":password,@"device":@0,@"token":@0} success:^(NSURLSessionDataTask *task, id responseObject) {
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(email!=nil){
+        [parameters setObject:email forKey:@"email"];
+    }
+    if(password!=nil){
+        [parameters setObject:password forKey:@"password"];
+    }
+    sesion *s = [sesion sharedInstance];
+    NSNumber* zero = [[NSNumber alloc] initWithInt:0];
+    if([s.latitude intValue] != [zero intValue]){
+        [parameters setObject:s.latitude forKey:@"lat"];
+    }
+    if([s.longitude intValue] != [zero intValue]){
+        [parameters setObject:s.longitude forKey:@"lng"];
+    }
+    if(token!=nil){
+        [parameters setObject:token forKey:@"token"];
+    }
+    
+    NSNumber* dev = [[NSNumber alloc] initWithInt:0];
+    [parameters setObject:dev forKey:@"device"];
+    NSLog(@"PARAMS %@",parameters);
+    [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
+        NSLog(@"RESPONSE %@",responseObject);
         NSDictionary *jsonDict = (NSDictionary *) responseObject;
-        if([[jsonDict objectForKey:@"response"] objectForKey:@"error"]==0){
-            NSArray *connection = [[NSArray alloc] initWithObjects:[[jsonDict objectForKey:@"connection"] objectForKey:@"code"], nil];
+        if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+            NSArray *connection = [[NSArray alloc] initWithObjects:jsonDict, nil];
             completionBlock(connection, nil);
         }
         else{
             int id_error = (int)[[jsonDict objectForKey:@"response"] objectForKey:@"error"];
-            NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+            NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
             completionBlock(nil, error);
         }
         
@@ -141,15 +180,28 @@ static NSString * const daoEngineBaseURL = @"http://192.168.1.41/";
 - (void)setCoordinates:(NSString *)connection_code latitude:(NSNumber *)latitude longitude:(NSNumber *)longitude y:(FetchCompletionBlock)completionBlock{
     
     NSString *path = [NSString stringWithFormat:@"setCoordinates"];
-    [self POST:path parameters:@{@"connection_code":connection_code,@"latitude":latitude,@"longitude":longitude} success:^(NSURLSessionDataTask *task, id responseObject) {
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+
+    if(latitude!=nil){
+        [parameters setObject:latitude forKey:@"lat"];
+    }
+    if(longitude!=nil){
+        [parameters setObject:longitude forKey:@"lng"];
+    }
+    if(connection_code!=nil){
+        [parameters setObject:connection_code forKey:@"connection_code"];
+    }
+    //NSLog(@"PARAMETROS COORDENATES %@",parameters);
+    [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
+        //NSLog(@"RESPONSE %@",responseObject);
         NSDictionary *jsonDict = (NSDictionary *) responseObject;
-        if([[jsonDict objectForKey:@"response"] objectForKey:@"error"]==0){
+        if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
             NSArray *connection = [[NSArray alloc] initWithObjects:[jsonDict objectForKey:@"success"], nil];
             completionBlock(connection, nil);
         }
         else{
             int id_error = (int)[[jsonDict objectForKey:@"response"] objectForKey:@"error"];
-            NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+            NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
             completionBlock(nil, error);
         }
         
@@ -159,17 +211,33 @@ static NSString * const daoEngineBaseURL = @"http://192.168.1.41/";
     
 }
 
-- (void)setLiked:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id y:(FetchCompletionBlock)completionBlock{
+- (void)setLiked:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id like_kind:(NSNumber *)like_kind y:(FetchCompletionBlock)completionBlock{
     NSString *path = [NSString stringWithFormat:@"setLiked"];
-    [self POST:path parameters:@{@"connection_code":connection_code,@"kind":kind,@"item_id":item_id} success:^(NSURLSessionDataTask *task, id responseObject) {
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    
+    if(item_id!=nil){
+        [parameters setObject:item_id forKey:@"item_id"];
+    }
+    if(kind!=nil){
+        [parameters setObject:kind forKey:@"kind"];
+    }
+    if(like_kind!=nil){
+        [parameters setObject:like_kind forKey:@"like_kind"];
+    }
+    if(connection_code!=nil){
+        [parameters setObject:connection_code forKey:@"connection_code"];
+    }
+    NSLog(@"LIKE PARAMS %@",parameters);
+    [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
+        NSLog(@"LIKE RESPONSE %@",responseObject);
         NSDictionary *jsonDict = (NSDictionary *) responseObject;
-        if([[jsonDict objectForKey:@"response"] objectForKey:@"error"]==0){
+        if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
             NSArray *connection = [[NSArray alloc] initWithObjects:[jsonDict objectForKey:@"success"], nil];
             completionBlock(connection, nil);
         }
         else{
             int id_error = (int)[[jsonDict objectForKey:@"response"] objectForKey:@"error"];
-            NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+            NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
             completionBlock(nil, error);
         }
         
@@ -177,17 +245,32 @@ static NSString * const daoEngineBaseURL = @"http://192.168.1.41/";
         completionBlock(nil, error);
     }];
 }
-- (void)setUnliked:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id y:(FetchCompletionBlock)completionBlock{
+- (void)setUnliked:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id like_kind:(NSNumber *)like_kind y:(FetchCompletionBlock)completionBlock{
     NSString *path = [NSString stringWithFormat:@"setUnliked"];
-    [self POST:path parameters:@{@"connection_code":connection_code,@"kind":kind,@"item_id":item_id} success:^(NSURLSessionDataTask *task, id responseObject) {
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(item_id!=nil){
+        [parameters setObject:item_id forKey:@"item_id"];
+    }
+    if(kind!=nil){
+        [parameters setObject:kind forKey:@"kind"];
+    }
+    if(like_kind!=nil){
+        [parameters setObject:like_kind forKey:@"like_kind"];
+    }
+    if(connection_code!=nil){
+        [parameters setObject:connection_code forKey:@"connection_code"];
+    }
+    NSLog(@"UNLIKE PARAMS %@",parameters);
+    [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
+        NSLog(@"UNLIKE RESPONSE %@",responseObject);
         NSDictionary *jsonDict = (NSDictionary *) responseObject;
-        if([[jsonDict objectForKey:@"response"] objectForKey:@"error"]==0){
+        if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
             NSArray *connection = [[NSArray alloc] initWithObjects:[jsonDict objectForKey:@"success"], nil];
             completionBlock(connection, nil);
         }
         else{
             int id_error = (int)[[jsonDict objectForKey:@"response"] objectForKey:@"error"];
-            NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+            NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
             completionBlock(nil, error);
         }
         

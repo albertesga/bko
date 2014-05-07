@@ -9,9 +9,8 @@
 #import "articles_dao.h"
 #import "AFNetworkActivityIndicatorManager.h"
 #import "Articles.h"
-#import "MTLJSONAdapter.h"
 
-static NSString * const daoEngineBaseURL = @"http://bko.com/api/";
+static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_services/";
 
 @implementation articles_dao
 
@@ -42,50 +41,220 @@ static NSString * const daoEngineBaseURL = @"http://bko.com/api/";
     return _sharedInstance;
 }
 
-- (void)fetchArticlesOnCompletion:(FetchArticlesCompletionBlock)completionBlock{
+- (void)getArticlesOnCompletion:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock{
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(code_connection!=nil){
+        [parameters setObject:code_connection forKey:@"connection_code"];
+    }
+    if(limit!=nil){
+        [parameters setObject:limit forKey:@"limit"];
+    }
+    if(page!=nil){
+        [parameters setObject:page forKey:@"page"];
+    }
+    NSString *path = [NSString stringWithFormat:@"getArticles"];
+    [self GET:path parameters:parameters
+      success:^(NSURLSessionDataTask *task, id responseObject) {
+          NSLog(@"");
+          if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==FALSE){
+              completionBlock([responseObject objectForKey:@"articles"], nil);
+          }
+          else{
+              int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+              NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+              completionBlock(nil, error);
+          }
+      }
+      failure:^(NSURLSessionDataTask *task, NSError *error) {
+          completionBlock(nil, error);
+      }];
+
+}
+
+- (void)getArticle:(NSString *)connection_code item_id:(NSNumber *)item_id y:(FetchArticlesCompletionBlock)completionBlock{
+    NSString *path = [NSString stringWithFormat:@"getArticle"];
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(item_id!=nil){
+        [parameters setObject:item_id forKey:@"article_id"];
+    }
+    if(connection_code!=nil){
+        [parameters setObject:connection_code forKey:@"connection_code"];
+    }
     
-    NSString *path = [NSString stringWithFormat:@"articles"];
-    [self GET:path parameters:nil success:^(NSURLSessionDataTask *task, id responseObject) {
-        //Convertimos el objeti responseObject de un NSArray a un NSMutableArray de Articles
-        /*NSMutableArray *articulos = [[NSMutableArray alloc] initWithCapacity:[responseObject count]];
-        for (NSDictionary *JSONnoteData in responseObject) {
-            Articles *articulo = [MTLJSONAdapter modelOfClass:[Articles class] fromJSONDictionary:JSONnoteData error:nil];
-            if (articulo) [articulos addObject:articulo];
-        }*/
-        completionBlock(responseObject, nil);
+    [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
+        
+        if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+            NSArray *connection = [[NSArray alloc] initWithObjects:[responseObject objectForKey:@"article"], nil];
+            completionBlock(connection, nil);
+        }
+        else{
+            int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+            NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+            completionBlock(nil, error);
+        }
+        
+    } failure:^(NSURLSessionDataTask *task, NSError *error) {
+        completionBlock(nil, error);
+    }];
+}
+
+- (void)getRelatedItems:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id related_kind:(NSNumber *)related_kind limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock {
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(item_id!=nil){
+        [parameters setObject:item_id forKey:@"item_id"];
+    }
+    if(connection_code!=nil){
+        [parameters setObject:connection_code forKey:@"connection_code"];
+    }
+    if(kind!=nil){
+        [parameters setObject:kind forKey:@"kind"];
+    }
+    if(related_kind!=nil){
+        [parameters setObject:related_kind forKey:@"related_kind"];
+    }
+    if(limit!=nil){
+        [parameters setObject:limit forKey:@"limit"];
+    }
+    if(page!=nil){
+        [parameters setObject:page forKey:@"page"];
+    }
+    NSLog(@" PARAMETROS %@",parameters);
+    NSString *path = [NSString stringWithFormat:@"getRelatedItems"];
+    [self GET:path parameters:parameters
+      success:^(NSURLSessionDataTask *task, id responseObject) {
+          NSLog(@" RESPONSE %@",responseObject);
+          if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+              completionBlock([responseObject objectForKey:@"related_items"], nil);
+          }
+          else{
+              int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+              NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+              completionBlock(nil, error);
+          }
+      }
+      failure:^(NSURLSessionDataTask *task, NSError *error) {
+          completionBlock(nil, error);
+      }];
+    
+}
+
+- (void)addArticleShare:(NSString *)connection_code item_id:(NSNumber *)item_id y:(FetchArticlesCompletionBlock)completionBlock{
+    NSString *path = [NSString stringWithFormat:@"addArticleShare"];
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(item_id!=nil){
+        [parameters setObject:item_id forKey:@"item_id"];
+    }
+    if(connection_code!=nil){
+        [parameters setObject:connection_code forKey:@"connection_code"];
+    }
+    [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
+        if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+            NSArray *connection = [[NSArray alloc] initWithObjects:[responseObject objectForKey:@"success"], nil];
+            completionBlock(connection, nil);
+        }
+        else{
+            int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+            NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+            completionBlock(nil, error);
+        }
+        
+    } failure:^(NSURLSessionDataTask *task, NSError *error) {
+        completionBlock(nil, error);
+    }];
+}
+
+- (void)getCard:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id y:(FetchArticlesCompletionBlock)completionBlock{
+    
+    NSString *path = [NSString stringWithFormat:@"getCard"];
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(item_id!=nil){
+        [parameters setObject:item_id forKey:@"item_id"];
+    }
+    if(connection_code!=nil){
+        [parameters setObject:connection_code forKey:@"connection_code"];
+    }
+    if(kind!=nil){
+        [parameters setObject:kind forKey:@"kind"];
+    }
+    NSLog(@" PARAMS %@",parameters);
+    [self GET:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
+        NSLog(@" RESPONSE %@",responseObject);
+        if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+            NSArray *connection = [[NSArray alloc] initWithObjects:[responseObject objectForKey:@"card"], nil];
+            completionBlock(connection, nil);
+        }
+        else{
+            int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+            NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+            completionBlock(nil, error);
+        }
+        
     } failure:^(NSURLSessionDataTask *task, NSError *error) {
         completionBlock(nil, error);
     }];
     
 }
 
-- (void)fetchArticlesOnCompletionConImagenes:(FetchArticlesCompletionBlock)completionBlock{
-    
-    NSString *path = [NSString stringWithFormat:@"articles"];
-    [self POST:path parameters:nil constructingBodyWithBlock:^(id<AFMultipartFormData> formData) {
-        
-        UIImage *image1 = [UIImage imageNamed:@"image1"];
-        NSData *image1Data = UIImageJPEGRepresentation(image1, 0.7);
-        UIImage *image2 = [UIImage imageNamed:@"image2"];
-        NSData *image2Data = UIImageJPEGRepresentation(image2, 0.7);
-        
-        [formData appendPartWithFormData:image1Data name:@"profile_avatar"];
-        [formData appendPartWithFormData:image2Data name:@"profile_background"];
+- (void)getArtistsSuggestions:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock{
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(code_connection!=nil){
+        [parameters setObject:code_connection forKey:@"connection_code"];
     }
-       success:^(NSURLSessionDataTask *task, id responseObject) {
-        //Convertimos el objeti responseObject de un NSArray a un NSMutableArray de Articles
-        NSMutableArray *articulos = [[NSMutableArray alloc] initWithCapacity:[responseObject count]];
-        for (NSDictionary *JSONnoteData in responseObject) {
-            Articles *articulo = [MTLJSONAdapter modelOfClass:[Articles class] fromJSONDictionary:JSONnoteData error:nil];
-            if (articulo) [articulos addObject:articulo];
-        }
-        
-        completionBlock(articulos, nil);
-    } failure:^(NSURLSessionDataTask *task, NSError *error) {
-        completionBlock(nil, error);
-    }];
+    if(limit!=nil){
+        [parameters setObject:limit forKey:@"limit"];
+    }
+    if(page!=nil){
+        [parameters setObject:page forKey:@"page"];
+    }
+    NSString *path = [NSString stringWithFormat:@"getArtistsSuggestions"];
+    [self GET:path parameters:parameters
+      success:^(NSURLSessionDataTask *task, id responseObject) {
+          if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==FALSE){
+              completionBlock([responseObject objectForKey:@"suggestions"], nil);
+          }
+          else{
+              int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+              NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+              completionBlock(nil, error);
+          }
+      }
+      failure:^(NSURLSessionDataTask *task, NSError *error) {
+          completionBlock(nil, error);
+      }];
+
     
 }
+- (void)getPlacesSuggestions:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock{
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(code_connection!=nil){
+        [parameters setObject:code_connection forKey:@"connection_code"];
+    }
+    if(limit!=nil){
+        [parameters setObject:limit forKey:@"limit"];
+    }
+    if(page!=nil){
+        [parameters setObject:page forKey:@"page"];
+    }
+    NSString *path = [NSString stringWithFormat:@"getPlacesSuggestions"];
+    [self GET:path parameters:parameters
+      success:^(NSURLSessionDataTask *task, id responseObject) {
+          if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==FALSE){
+              completionBlock([responseObject objectForKey:@"suggestions"], nil);
+          }
+          else{
+              int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+              NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+              completionBlock(nil, error);
+          }
+      }
+      failure:^(NSURLSessionDataTask *task, NSError *error) {
+          completionBlock(nil, error);
+      }];
+
+    
+}
+
+
 
 - (instancetype)initWithBaseURL:(NSURL *)url sessionConfiguration:(NSURLSessionConfiguration *)configuration
 {

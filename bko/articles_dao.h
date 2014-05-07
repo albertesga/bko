@@ -15,6 +15,11 @@ typedef void (^FetchArticlesCompletionBlock)(NSArray *notes, NSError *error);
 
 + (instancetype)sharedInstance;
 
-- (void)fetchArticlesOnCompletion:(FetchArticlesCompletionBlock)completionBlock;
-
+- (void)getArticlesOnCompletion:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock;
+- (void)getArticle:(NSString *)connection_code item_id:(NSNumber *)item_id y:(FetchArticlesCompletionBlock)completionBlock;
+- (void)getRelatedItems:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id related_kind:(NSNumber *)related_kind limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock;
+- (void)addArticleShare:(NSString *)connection_code item_id:(NSNumber *)item_id y:(FetchArticlesCompletionBlock)completionBlock;
+- (void)getCard:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id y:(FetchArticlesCompletionBlock)completionBlock;
+- (void)getArtistsSuggestions:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock;
+- (void)getPlacesSuggestions:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock;
 @end
