@@ -12,5 +12,5 @@
 @interface registerNoFbPaso2ViewController : UIViewController<CLLocationManagerDelegate>{
     CLLocationManager *locationManager;
 }
-
+@property (assign) NSInteger numero_likes;
 @end

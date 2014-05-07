@@ -10,6 +10,7 @@
 #import "sorteosIndexViewController.h"
 #import "SWRevealViewController.h"
 #import "menuController.h"
+#import "sesion.h"
 
 @interface menuLateralViewController ()
 
@@ -18,8 +19,11 @@
 
 @implementation menuLateralViewController
 
+#define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
+
 - (void) prepareForSegue: (UIStoryboardSegue *) segue sender: (id) sender
 {
+    NSLog(@"ESTAMOS");
     // configure the destination view controller:
     
     // configure the segue.
@@ -44,6 +48,7 @@
     }
 }
 
+
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
 {
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
@@ -56,7 +61,23 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    _numero_mensajes.font = FONT_BEBAS(10.0f);
     // Do any additional setup after loading the view.
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    sesion *s = [sesion sharedInstance];
+    if(s.messages_unread.intValue!=0 && s.messages_unread !=nil ){
+        self.numero_mensajes.text = [s.messages_unread stringValue];
+        self.numero_mensajes.hidden = FALSE;
+        self.notificacion_view.hidden = FALSE;
+    }
+    else{
+        self.numero_mensajes.hidden = TRUE;
+        self.notificacion_view.hidden = TRUE;
+    }
 }
 
 - (void)didReceiveMemoryWarning

@@ -7,7 +7,9 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "ALRadialMenu.h"
+#import "ALRadialButton.h"
 
-@interface planesIndexViewController : UIViewController
-
+@interface planesIndexViewController : UIViewController<ALRadialMenuDelegate>
+@property (strong, nonatomic) ALRadialMenu *radialMenu;
 @end

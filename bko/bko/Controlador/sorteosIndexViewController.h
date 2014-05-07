@@ -7,7 +7,10 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "ALRadialMenu.h"
+#import "ALRadialButton.h"
 
-@interface sorteosIndexViewController : UIViewController
+@interface sorteosIndexViewController : UIViewController <ALRadialMenuDelegate>
 
+@property (strong, nonatomic) ALRadialMenu *radialMenu;
 @end

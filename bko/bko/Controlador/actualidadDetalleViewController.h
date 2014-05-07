@@ -7,7 +7,12 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "ALRadialMenu.h"
+#import "ALRadialButton.h"
 
-@interface actualidadDetalleViewController : UIViewController
+@interface actualidadDetalleViewController : UIViewController<ALRadialMenuDelegate>
+
+@property (strong, nonatomic) ALRadialMenu *radialMenu;
+@property (assign) NSInteger id_articulo;
 
 @end

@@ -9,7 +9,7 @@
 #import "registerNoFbViewController.h"
 #import "backgroundAnimate.h"
 #import "register_dao.h"
-#import "registerNoFbPaso2ViewController.h"
+#import "mailEnviadoViewController.h"
 
 @interface registerNoFbViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *por_favor;
@@ -43,38 +43,111 @@
     _si_no_facebook.font = FONT_BEBAS(18.0f);
     _por_favor.font = FONT_BEBAS(18.0f);
     _completa_los_campos.font = FONT_BEBAS(18.0f);
+    
+    UIView *paddingView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
+    paddingView.backgroundColor = [UIColor clearColor];
+    UIView *paddingView2 = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
+    paddingView2.backgroundColor = [UIColor clearColor];
+    UIView *paddingView3 = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
+    paddingView3.backgroundColor = [UIColor clearColor];
+    UIView *paddingView4 = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
+    paddingView4.backgroundColor = [UIColor clearColor];
+    self.nombre.leftView = paddingView;
+    self.nombre.leftViewMode = UITextFieldViewModeAlways;
+    self.email.leftView = paddingView2;
+    self.email.leftViewMode = UITextFieldViewModeAlways;
+    self.apellidos.leftView = paddingView3;
+    self.apellidos.leftViewMode = UITextFieldViewModeAlways;
+    self.fecha_nacimiento.leftView = paddingView4;
+    self.fecha_nacimiento.leftViewMode = UITextFieldViewModeAlways;
 }
 
+- (BOOL)textFieldShouldReturn:(UITextField *)theTextField {
+    if (theTextField == self.nombre || theTextField == self.apellidos  || theTextField == self.email || theTextField == self.fecha_nacimiento) {
+        [theTextField resignFirstResponder];
+    }
+    return YES;
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event{
+    //hides keyboard when another part of layout was touched
+    [self.view endEditing:YES];
+    [super touchesBegan:touches withEvent:event];
+}
+
+- (IBAction)textFieldDidBeginEditing:(id)sender {
+    [self animateTextField: sender up: YES];
+}
+
+- (IBAction)textFieldDidEndEditing:(UITextField *)sender
+{
+    [self animateTextField: sender up: NO];
+}
+
+- (IBAction)dateTextFieldEndEditing:(id)sender {
+    [self animateTextField: sender up: NO];
+}
+
+- (void) animateTextField: (UITextField*) textField up: (BOOL) up
+{
+    const int movementDistance = 80; // tweak as needed
+    const float movementDuration = 0.3f; // tweak as needed
+    
+    int movement = (up ? -movementDistance : movementDistance);
+    
+    [UIView beginAnimations: @"anim" context: nil];
+    [UIView setAnimationBeginsFromCurrentState: YES];
+    [UIView setAnimationDuration: movementDuration];
+    self.view.frame = CGRectOffset(self.view.frame, 0, movement);
+    [UIView commitAnimations];
+}
+
+// ********* VALIDATIONS ***********
+- (BOOL)validateInputEmail:(NSString *)emailStr
+{
+    NSString *emailRegex = @"[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,4}";
+    NSPredicate *emailTest = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", emailRegex];
+    return [emailTest evaluateWithObject:_email.text];
+}
+
+- (IBAction)validateEmail:(id)sender {
+    if(![self validateInputEmail:[_email text]])
+    {
+        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"Error" message:@"Escribe un mail correcto." delegate:self cancelButtonTitle:nil otherButtonTitles:@"OK", nil];
+        [alert show];
+    }
+}
+
+
 - (IBAction)siguiente:(id)sender {
-    [[register_dao sharedInstance] addUser:_email.text name:_nombre.text surname:_apellidos.text birthdate:_fecha_nacimiento.text y:^(NSArray *password, NSError *error) {
-        if (!error) {
+    if(![self validateInputEmail:[_email text]])
+    {
+        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"Error" message:@"Escribe un mail correcto." delegate:self cancelButtonTitle:nil otherButtonTitles:@"OK", nil];
+        [alert show];
+    }
+    else{
+        [[register_dao sharedInstance] addUser:_email.text name:_nombre.text surname:_apellidos.text birthdate:_fecha_nacimiento.text y:^(NSArray *password, NSError *error) {
+            if (!error) {
             //Hacemos login para tener el código de conexión
-            [[register_dao sharedInstance] login:_email.text password:[password objectAtIndex:0] y:^(NSArray *connection, NSError *error) {
-                if (!error) {
-                    //Debemos hacer likes automáticos en el registro a través de facebook
-                    [[register_dao sharedInstance] getAllFacebookArtists:^(NSArray *artists, NSError *error) {
-                        if (!error) {
-                            //Debemos hacer likes automáticos en el registro a través de facebook
-                            UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
-                            registerNoFbPaso2ViewController *actualidad =
-                            [storyboard instantiateViewControllerWithIdentifier:@"registerNoFbPaso2ViewController"];
-                            [self presentViewController:actualidad animated:NO completion:nil];
-                        } else {
-                            // Error processing
-                        }
-                    }];
-                } else {
-                    // Error processing
-                    NSLog(@"Error en la llamada del registro: %@", error);
-                }
-            }];
+                    NSLog(@"PASSWORD: %@",[password objectAtIndex:0]);
+
+                    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+                    mailEnviadoViewController *actualidad =
+                    [storyboard instantiateViewControllerWithIdentifier:@"mailEnviadoViewController"];
+                    [self presentViewController:actualidad animated:NO completion:nil];
             
-            
-        } else {
-            // Error processing
-            NSLog(@"Error en la llamada del registro: %@", error);
-        }
+            } else {
+                // Error processing
+                NSLog(@"Error en la llamada del registro: %@", error);
+                UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
+                                                               message:[error localizedDescription]
+                                                              delegate:self
+                                                     cancelButtonTitle:@"OK"
+                                                     otherButtonTitles:nil];
+                [theAlert show];
+            }
     }];
+    }
 }
 
 - (IBAction)mostrarDatePicker:(id)sender {
@@ -112,6 +185,10 @@
 }
 
 - (IBAction)callDatePicker:(id)sender {
+    [_email resignFirstResponder];
+    [_apellidos resignFirstResponder];
+    [_nombre resignFirstResponder];
+    
     [_fecha_nacimiento endEditing:YES];
     if ([self.view viewWithTag:9]) {
         return;
@@ -142,7 +219,6 @@
     UIBarButtonItem *doneButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(dismissDatePicker:)];
     [toolBar setItems:[NSArray arrayWithObjects:spacer, doneButton, nil]];
     [self.view addSubview:toolBar];
-    
     [UIView beginAnimations:@"MoveIn" context:nil];
     toolBar.frame = toolbarTargetFrame;
     datePicker.frame = datePickerTargetFrame;
@@ -152,7 +228,7 @@
 
 - (void)changeDate:(UIDatePicker *)sender {
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-    [formatter setDateFormat:@"dd-MM-yyyy"];
+    [formatter setDateFormat:@"dd/MM/yyyy"];
     NSString *stringFromDate = [formatter stringFromDate:sender.date];
     _fecha_nacimiento.text= stringFromDate;
 }

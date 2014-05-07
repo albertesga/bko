@@ -10,7 +10,7 @@
 #import "ALRadialMenu.h"
 #import "ALRadialButton.h"
 
-@interface actualidadIndexViewController : UIViewController <ALRadialMenuDelegate>
+@interface actualidadIndexViewController : UIViewController <ALRadialMenuDelegate,UIScrollViewDelegate>
 
 @property (strong, nonatomic) ALRadialMenu *radialMenu;
 

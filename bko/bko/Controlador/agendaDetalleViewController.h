@@ -7,7 +7,13 @@
 //
 
 #import <UIKit/UIKit.h>
+#import <CoreLocation/CoreLocation.h>
+#import "ALRadialButton.h"
+#import "ALRadialMenu.h"
 
-@interface agendaDetalleViewController : UIViewController
-
+@interface agendaDetalleViewController : UIViewController <UIScrollViewDelegate,CLLocationManagerDelegate,ALRadialMenuDelegate> {
+    CLLocationManager *locationManager;
+}
+@property (assign) NSInteger id_party;
+@property (strong, nonatomic) ALRadialMenu *radialMenu;
 @end

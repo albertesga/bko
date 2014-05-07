@@ -8,6 +8,6 @@
 
 #import <UIKit/UIKit.h>
 
-@interface registerNoFbViewController : UIViewController
+@interface registerNoFbViewController : UIViewController <UITextFieldDelegate>
 
 @end

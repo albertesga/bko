@@ -9,5 +9,6 @@
 #import <UIKit/UIKit.h>
 
 @interface menuLateralViewController : UIViewController
-
+@property (weak, nonatomic) IBOutlet UIImageView *notificacion_view;
+@property (weak, nonatomic) IBOutlet UILabel *numero_mensajes;
 @end

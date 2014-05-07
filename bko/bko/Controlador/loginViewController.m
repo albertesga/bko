@@ -9,7 +9,12 @@
 #import "loginViewController.h"
 #import "backgroundAnimate.h"
 #import "register_dao.h"
+#import <CommonCrypto/CommonDigest.h>
 #import "revealViewController.h"
+#import "registerNoFbPaso2ViewController.h"
+#import "sesion.h"
+#import "utils.h"
+#import "message_dao.h"
 
 @interface loginViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *si_ya_tienes_label;
@@ -38,10 +43,61 @@
 {
     
     [super viewDidLoad];
+    self.email.delegate = self;
+    self.password.delegate = self;
+    self.password.secureTextEntry = YES;
+    
+    UIView *paddingView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
+    paddingView.backgroundColor = [UIColor clearColor];
+    UIView *paddingView2 = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
+    paddingView2.backgroundColor = [UIColor clearColor];
+    
+    self.password.leftView = paddingView;
+    self.password.leftViewMode = UITextFieldViewModeAlways;
+    self.email.leftView = paddingView2;
+    self.email.leftViewMode = UITextFieldViewModeAlways;
+    
     _si_ya_tienes_label.font = FONT_BEBAS(18.0f);
     _por_favor_label.font = FONT_BEBAS(18.0f);
     _completa_los_campos_label.font = FONT_BEBAS(18.0f);
     // Do any additional setup after loading the view.
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)theTextField {
+    if (theTextField == self.email || theTextField == self.password) {
+        [theTextField resignFirstResponder];
+    }
+    return YES;
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event{
+    //hides keyboard when another part of layout was touched
+    [self.view endEditing:YES];
+    [super touchesBegan:touches withEvent:event];
+}
+
+
+- (IBAction)textFieldDidBeginEditing:(id)sender {
+    [self animateTextField: sender up: YES];
+}
+
+- (IBAction)textFieldDidEndEditing:(UITextField *)sender
+{
+    [self animateTextField: sender up: NO];
+}
+
+- (void) animateTextField: (UITextField*) textField up: (BOOL) up
+{
+    const int movementDistance = 80; // tweak as needed
+    const float movementDuration = 0.3f; // tweak as needed
+    
+    int movement = (up ? -movementDistance : movementDistance);
+    
+    [UIView beginAnimations: @"anim" context: nil];
+    [UIView setAnimationBeginsFromCurrentState: YES];
+    [UIView setAnimationDuration: movementDuration];
+    self.view.frame = CGRectOffset(self.view.frame, 0, movement);
+    [UIView commitAnimations];
 }
 
 - (void)didReceiveMemoryWarning
@@ -51,19 +107,74 @@
 }
 
 - (IBAction)login:(id)sender {
-    [[register_dao sharedInstance] login:_email.text password:[_password text] y:^(NSArray *connection, NSError *error) {
+    NSString* password_md5 = [self md5:_password.text];
+    [[register_dao sharedInstance] login:_email.text password:password_md5 token:nil y:^(NSArray *connection, NSError *error) {
         if (!error) {
-            //Debemos hacer likes automáticos en el registro a través de facebook
-            UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
-            revealViewController *actualidad =
-            [storyboard instantiateViewControllerWithIdentifier:@"revealViewController"];
-            [self presentViewController:actualidad animated:NO completion:nil];
+            
+                
+                sesion *s = [sesion sharedInstance];
+                NSDictionary* con = [connection objectAtIndex:0];
+                s.codigo_conexion = [[con objectForKey:@"connection"] objectForKey:@"code"];
+                [[message_dao sharedInstance] getUnreadMessagesCount:s.codigo_conexion y:^(NSArray *countMessages, NSError *error) {
+                if (!error) {
+                    NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
+                    [f setNumberStyle:NSNumberFormatterDecimalStyle];
+                    
+                    NSDictionary* c = [countMessages objectAtIndex:0];
+                    s.messages_unread = [c objectForKey:@"count"];
+                } else {
+                    // Error processing
+                    NSLog(@"Error en la llamada del Recoger Mensajes: %@", error);
+                    UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
+                                                                       message:[error localizedDescription]
+                                                                      delegate:self
+                                                             cancelButtonTitle:@"OK"
+                                                             otherButtonTitles:nil];
+                    [theAlert show];
+                }
+            }];
+                [utils allowUserToUseApp:_email.text password:password_md5];
+                if([[con objectForKey:@"test"] intValue]==1){
+                    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+                    registerNoFbPaso2ViewController *actualidad =
+                    [storyboard instantiateViewControllerWithIdentifier:@"registerNoFbPaso2ViewController"];
+                    actualidad.numero_likes = 0;
+                    [self presentViewController:actualidad animated:NO completion:nil];
+                }
+                else{
+                    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+                    revealViewController *actualidad =
+                    [storyboard instantiateViewControllerWithIdentifier:@"revealViewController"];
+                    [self presentViewController:actualidad animated:NO completion:nil];
+            }
         } else {
             // Error processing
-            NSLog(@"Error en la llamada del registro: %@", error);
+            NSLog(@"Error en la llamada del login: %@", error);
+            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
+                                                               message:[error localizedDescription]
+                                                              delegate:self
+                                                     cancelButtonTitle:@"OK"
+                                                     otherButtonTitles:nil];
+            [theAlert show];
         }
     }];
 
+}
+
+- (NSString *)md5:(NSString*)pass
+{
+    NSString* salt = @"DYhG93b0qyJfIxfs2gufoUubWwvneR2G0FgaC9mi";
+    NSString *value = [salt stringByAppendingString:pass];
+    const char *cStr = [value UTF8String];
+    unsigned char result[CC_MD5_DIGEST_LENGTH];
+    CC_MD5( cStr, strlen(cStr), result ); // This is the md5 call
+    return [NSString stringWithFormat:
+            @"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+            result[0], result[1], result[2], result[3],
+            result[4], result[5], result[6], result[7],
+            result[8], result[9], result[10], result[11],
+            result[12], result[13], result[14], result[15]
+            ];
 }
 
 - (void)viewDidAppear:(BOOL)animated {

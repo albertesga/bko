@@ -7,7 +7,11 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "ALRadialMenu.h"
+#import "ALRadialButton.h"
 
-@interface fichaViewController : UIViewController
-
+@interface fichaViewController : UIViewController <ALRadialMenuDelegate>
+@property (assign) int id_card;
+@property (assign) int kind;
+@property (strong, nonatomic) ALRadialMenu *radialMenu;
 @end

@@ -7,7 +7,12 @@
 //
 
 #import <UIKit/UIKit.h>
+#import <CoreLocation/CoreLocation.h>
+#import "ALRadialMenu.h"
+#import "ALRadialButton.h"
 
-@interface agendaArtistasIndexViewController : UIViewController
-
+@interface agendaArtistasIndexViewController : UIViewController <UIScrollViewDelegate,CLLocationManagerDelegate,ALRadialMenuDelegate> {
+    CLLocationManager *locationManager;
+}
+@property (strong, nonatomic) ALRadialMenu *radialMenu;
 @end
