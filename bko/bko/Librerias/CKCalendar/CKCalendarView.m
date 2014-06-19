@@ -21,7 +21,7 @@
 #import "CKCalendarView.h"
 
 #define BUTTON_MARGIN 0
-#define CALENDAR_MARGIN 0
+#define CALENDAR_MARGIN -6
 #define TOP_HEIGHT 30
 #define DAYS_HEADER_HEIGHT 22
 #define DEFAULT_CELL_WIDTH 43
@@ -93,7 +93,7 @@
     self = [super init];
     if (self) {
         self.backgroundColor = [UIColor colorWithRed:65.0/255.0f green:65.0/255.0f blue:65.0/255.0f alpha:1];
-        self.selectedBackgroundColor = [UIColor colorWithRed:65.0/255.0f green:65.0/255.0f blue:65.0/255.0f alpha:1];
+        self.selectedBackgroundColor = [UIColor colorWithRed:14.0/255.0f green:237.0/255.0f blue:166.0/255.0f alpha:1];
         self.textColor = [UIColor whiteColor];
         self.selectedTextColor = [UIColor colorWithRed:0.0/255.0f green:206.0/255.0f blue:155.0/255.0f alpha:1];
     }
@@ -133,7 +133,7 @@
 }
 
 - (id)initWithStartDay:(CKCalendarStartDay)firstDay {
-    return [self initWithStartDay:firstDay frame:CGRectMake(0, 10, 320, 320)];
+    return [self initWithStartDay:firstDay frame:CGRectMake(0, 5, 320, 320)];
 }
 
 - (void)_init:(CKCalendarStartDay)firstDay {
@@ -163,7 +163,7 @@
     // SET UP THE HEADER
     UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     titleLabel.textAlignment = NSTextAlignmentCenter;
-    titleLabel.backgroundColor = [UIColor clearColor];
+    titleLabel.backgroundColor = [UIColor blackColor];
     titleLabel.autoresizingMask = UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleWidth;
     [self addSubview:titleLabel];
     self.titleLabel = titleLabel;
@@ -269,9 +269,9 @@
 
     self.titleLabel.text = [self.dateFormatter stringFromDate:_monthShowing];
     self.titleLabel.font = FONT_BEBAS(13.0f);
-    self.titleLabel.frame = CGRectMake(0, 0, self.bounds.size.width, TOP_HEIGHT);
-    self.prevButton.frame = CGRectMake(BUTTON_MARGIN, BUTTON_MARGIN, 48, 30);
-    self.nextButton.frame = CGRectMake(self.bounds.size.width - 48 - BUTTON_MARGIN, BUTTON_MARGIN, 48, 30);
+    self.titleLabel.frame = CGRectMake(0, 0, self.bounds.size.width, 20);
+    self.prevButton.frame = CGRectMake(BUTTON_MARGIN, -4, 48, 30);
+    self.nextButton.frame = CGRectMake(self.bounds.size.width - 48 - BUTTON_MARGIN, -4, 48, 30);
 
     self.calendarContainer.frame = CGRectMake(CALENDAR_MARGIN, CGRectGetMaxY(self.titleLabel.frame), containerWidth, containerHeight);
     self.daysHeader.frame = CGRectMake(0, 0, self.calendarContainer.frame.size.width, DAYS_HEADER_HEIGHT);
@@ -320,6 +320,8 @@
             [self.delegate calendar:self configureDateItem:item forDate:date];
         }
 
+        NSLog(@"SELECTED DATE %@",self.selectedDate);
+        
         if (self.selectedDate && [self date:self.selectedDate isSameDayAsDate:date]) {
             [dateButton setTitleColor:item.selectedTextColor forState:UIControlStateNormal];
             dateButton.backgroundColor = item.selectedBackgroundColor;
@@ -330,6 +332,7 @@
         if([self dateIsPassed:date]){
             [dateButton setTitleColor:[UIColor colorWithRed:197.0/255.0f green:197.0/255.0f blue:197.0/255.0f alpha:1] forState:UIControlStateNormal];
             dateButton.backgroundColor = [UIColor colorWithRed:94.0/255.0f green:94.0/255.0f blue:94.0/255.0f alpha:1];
+            [[dateButton layer] setBorderWidth:0.0f];
         }
         else {
             NSCalendar *calendar = [NSCalendar currentCalendar];
@@ -354,7 +357,7 @@
                     dateButton.backgroundColor = [UIColor colorWithRed:71.0/255.0f green:79.0/255.0f blue:77.0/255.0f alpha:1];
                 }
             }
-            
+
         }
 
         dateButton.frame = [self _calculateDayCellFrame:date];
@@ -368,6 +371,7 @@
     if ([self.delegate respondsToSelector:@selector(calendar:didLayoutInRect:)]) {
         [self.delegate calendar:self didLayoutInRect:self.frame];
     }
+    
 }
 
 - (void) setDateWithEvent:(NSDate*)date{
@@ -451,7 +455,11 @@
 }
 
 - (void)reloadData {
-    self.selectedDate = nil;
+    //self.selectedDate = nil;
+    [self setNeedsLayout];
+}
+
+- (void)reloadDataWithoutSelectedData {
     [self setNeedsLayout];
 }
 
@@ -648,8 +656,8 @@
         return NO;
     }
 
-    NSDateComponents *day = [self.calendar components:NSEraCalendarUnit|NSYearCalendarUnit|NSMonthCalendarUnit|NSDayCalendarUnit fromDate:date1];
-    NSDateComponents *day2 = [self.calendar components:NSEraCalendarUnit|NSYearCalendarUnit|NSMonthCalendarUnit|NSDayCalendarUnit fromDate:date2];
+    NSDateComponents *day = [self.calendar components:NSHourCalendarUnit|NSEraCalendarUnit|NSYearCalendarUnit|NSMonthCalendarUnit|NSDayCalendarUnit fromDate:date1];
+    NSDateComponents *day2 = [self.calendar components:NSHourCalendarUnit|NSEraCalendarUnit|NSYearCalendarUnit|NSMonthCalendarUnit|NSDayCalendarUnit fromDate:date2];
     return ([day2 day] == [day day] &&
             [day2 month] == [day month] &&
             [day2 year] == [day year] &&

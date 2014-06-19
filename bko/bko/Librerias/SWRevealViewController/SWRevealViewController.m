@@ -888,6 +888,11 @@ static NSString * const SWSegueRightIdentifier = @"sw_right";
     return _panGestureRecognizer;
 }
 
+- (void)panGestureRecognizerToNul
+{
+    _panGestureRecognizer=nil;
+}
+
 
 - (UITapGestureRecognizer*)tapGestureRecognizer
 {
@@ -940,7 +945,6 @@ static NSString * const SWSegueRightIdentifier = @"sw_right";
 
 - (void)_notifyPanGestureBegan
 {
-    NSLog(@"LOL");
     if ( [_delegate respondsToSelector:@selector(revealControllerPanGestureBegan:)] )
         [_delegate revealControllerPanGestureBegan:self];
     

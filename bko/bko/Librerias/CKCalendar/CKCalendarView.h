@@ -59,6 +59,7 @@ typedef enum {
 
 - (void)selectDate:(NSDate *)date makeVisible:(BOOL)visible;
 - (void)reloadData;
+- (void)reloadDataWithoutSelectedData;
 - (void)reloadDates:(NSArray *)dates;
 
 // Helper methods for delegates, etc.
