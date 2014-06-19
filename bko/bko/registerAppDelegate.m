@@ -14,8 +14,10 @@
 #import "register_dao.h"
 #import "message_dao.h"
 #import "sesion.h"
+#import "sinConexionViewController.h"
 
 @implementation registerAppDelegate
+
 
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
 
@@ -34,6 +36,10 @@
     
     //Parámetro que permite dejar de controlar el indicador de la conexión
     [[AFNetworkActivityIndicatorManager sharedManager] setEnabled:YES];
+    
+    // Let the device know we want to receive push notifications
+	[[UIApplication sharedApplication] registerForRemoteNotificationTypes:
+     (UIRemoteNotificationTypeBadge | UIRemoteNotificationTypeSound | UIRemoteNotificationTypeAlert)];
     
     return YES;
 }
@@ -62,9 +68,23 @@
     // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later. 
     // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
     //Hacemos el login a través del fichero
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        
+        UIViewController *topRootViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
+        while (topRootViewController.presentedViewController)
+        {
+            topRootViewController = topRootViewController.presentedViewController;
+        }
+        
+        [topRootViewController presentViewController:sinConexion animated:YES completion:nil];
+        return;
+    }
     if([utils userAllowedToUseApp]){
         NSDictionary* user_pass = [utils retriveUsernamePassword];
-        [[register_dao sharedInstance] login:[user_pass objectForKey:@"username"] password:[user_pass objectForKey:@"password"] token:nil y:^(NSArray *connection, NSError *error) {
+        [[register_dao sharedInstance] login:[user_pass objectForKey:@"username"] password:[user_pass objectForKey:@"password"] token:[utils retrieveToken] y:^(NSArray *connection, NSError *error) {
             if (!error) {
                 sesion *s = [sesion sharedInstance];
                 NSDictionary* con = [connection objectAtIndex:0];
@@ -92,13 +112,30 @@
                 
             } else {
                 // Error processing
-                NSLog(@"Error en la llamada del login: %@", error);
+                [utils controlarErrores:error];
+                NSLog(@"Error en la llamada del login en el Delegate: %@", error);
+                /*
+                if([[error localizedDescription] isEqualToString:@"The Internet connection appears to be offline."]){
+                    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+                    sinConexionViewController *sinConexion =
+                    [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+                    
+                    UIViewController *topRootViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
+                    while (topRootViewController.presentedViewController)
+                    {
+                        topRootViewController = topRootViewController.presentedViewController;
+                    }
+                    
+                    [topRootViewController presentViewController:sinConexion animated:YES completion:nil];
+                    return;
+                }
+                
                 UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
                                                                message:[error localizedDescription]
                                                               delegate:self
                                                      cancelButtonTitle:@"OK"
                                                      otherButtonTitles:nil];
-                [theAlert show];
+                [theAlert show];*/
             }
         }];
     }
@@ -119,6 +156,17 @@
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
 }
 
+
+- (void)application:(UIApplication*)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData*)deviceToken
+{
+	NSLog(@"My token is: %@", [NSString stringWithFormat:@"%@",deviceToken]);
+    [utils insertToken:[NSString stringWithFormat:@"%@",deviceToken]];
+}
+
+- (void)application:(UIApplication*)application didFailToRegisterForRemoteNotificationsWithError:(NSError*)error
+{
+	NSLog(@"Failed to get token, error: %@", error);
+}
 
 
 @end
