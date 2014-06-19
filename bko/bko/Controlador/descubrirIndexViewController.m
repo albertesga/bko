@@ -15,6 +15,10 @@
 #import "actualidadIndexViewController.h"
 #import "agendaIndexViewController.h"
 #import "sorteosIndexViewController.h"
+#import "sinConexionViewController.h"
+#import "utils.h"
+#import "constructorVistas.h"
+#import "fichaViewController.h"
 
 @interface descubrirIndexViewController ()
 @property (weak, nonatomic) IBOutlet UIBarButtonItem *menu_lateral_button;
@@ -25,6 +29,8 @@
 @property (weak, nonatomic) IBOutlet UIImageView *banner_artistas;
 @property (weak, nonatomic) IBOutlet UIImageView *degradado_menu;
 @property (weak, nonatomic) IBOutlet UIButton *menu_button;
+@property (weak, nonatomic) IBOutlet UITextField *textViewBuscar;
+@property (weak, nonatomic) IBOutlet UIView *viewBuscar;
 
 @end
 
@@ -32,6 +38,9 @@
 
 int numero_art = 1;
 int numero_sit = 1;
+int numero_resultados_descubrir = 0;
+NSString* ultima_busqueda_descubrir = @"";
+#define DEVICE_SIZE [[[[UIApplication sharedApplication] keyWindow] rootViewController].view convertRect:[[UIScreen mainScreen] bounds] fromView:nil].size
 
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
 
@@ -47,6 +56,10 @@ int numero_sit = 1;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self conectado];
+    
+    [_viewBuscar setTranslatesAutoresizingMaskIntoConstraints:YES];
+    self.textViewBuscar.delegate=self;
     
     numero_art = 1;
     numero_sit = 1;
@@ -57,16 +70,62 @@ int numero_sit = 1;
     
     [self.menu_lateral_button setTarget: self.revealViewController];
     [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
-    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
-    self.revealViewController.rightViewRevealWidth = 118;
+    [self.revealViewController panGestureRecognizer];
+    [self.revealViewController tapGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 180;
+    self.revealViewController.delegate = self;
     
     self.altura_scroll.constant = 700;
     
     
     [self showSitios:true];
     
-    
-    
+}
+
+-(void)viewDidAppear:(BOOL)animated{
+    NSInteger numberOfViewControllers = self.navigationController.viewControllers.count;
+    if ([[self.navigationController.viewControllers objectAtIndex:numberOfViewControllers - 2] isKindOfClass:[self class]]){
+        NSMutableArray *allControllers = [[NSMutableArray alloc] initWithArray:self.navigationController.viewControllers];
+        [allControllers removeObjectAtIndex:[allControllers count] - 2];
+        [self.navigationController setViewControllers:allControllers animated:NO];
+    }
+}
+
+- (void)viewWillDisappear:(BOOL)animated{
+    if(!_degradado_menu.hidden){
+        [self.radialMenu buttonsWillAnimateFromButton:_menu_button withFrame:self.menu_button.frame inView:self.view];
+        [UIView transitionWithView:_degradado_menu
+                          duration:0.8
+                           options:
+         UIViewAnimationOptionTransitionCrossDissolve
+                        animations:NULL
+                        completion:NULL];
+        _degradado_menu.hidden = true;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==1){
+            [v removeFromSuperview];
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+}
+
+- (void)revealController:(SWRevealViewController *)revealController willMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController didMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
 }
 
 - (void) showArtistas:(bool)mas{
@@ -84,27 +143,15 @@ int numero_sit = 1;
             }
             if([articles count]==0){
                 [_banner_artistas setImage:[UIImage imageNamed:@"8_label_SITIOS.png"]] ;
-                _banner_sitios.hidden=YES;
+                _banner_artistas.hidden=YES;
                 for(UIView* v in _view_inside_scrollview.subviews){
                     CGRect frame = v.frame;
                     frame.origin.y = frame.origin.y-295;
                     frame.origin.x = frame.origin.x;
                     v.frame = frame;
-                    NSLog(@"VISTA %@", [v class]);
-                    NSLog(@"X %f", frame.origin.y);
-                    NSLog(@"Y %f", frame.origin.x);
                     if(v.tag==0){
                         [v removeFromSuperview];
                     }
-                    /*else if(v.tag==1){
-                        CGRect frame = v.frame;
-                        frame.origin.y = 45;
-                        v.frame = frame;
-                        
-                        frame = _banner_sitios.frame;
-                        frame.origin.y = 15;
-                        _banner_sitios.frame = frame;
-                    }*/
                 }
                 UILabel *no_hay_sugerencias = [[UILabel alloc] initWithFrame:CGRectMake(20, 100, 280, 21)];
                 no_hay_sugerencias.font = FONT_BEBAS(16.0f);
@@ -120,14 +167,7 @@ int numero_sit = 1;
                 }
             }
         } else {
-            // Error processing
-            NSLog(@"Error al hacer getArtistsSuggestions: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -148,7 +188,7 @@ int numero_sit = 1;
             if([places count]==0){
                 _banner_sitios.hidden=YES;
                 for(UIView* v in _view_inside_scrollview.subviews){
-                    if(v.tag==1){
+                    if(v.tag==50){
                         [v removeFromSuperview];
                     }
                 }
@@ -160,14 +200,7 @@ int numero_sit = 1;
             }
             [self showArtistas:true];
         } else {
-            // Error processing
-            NSLog(@"Error al hacer getPlacesSuggestions: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -186,6 +219,7 @@ int numero_sit = 1;
     tituloDescubrir.font = FONT_BEBAS(18.0f);
     tituloDescubrir.textAlignment=NSTextAlignmentCenter;
     tituloDescubrir.scrollEnabled = NO;
+    tituloDescubrir.userInteractionEnabled = NO;
     
     UIButton *buttonImagenDescubrir = [[UIButton alloc] initWithFrame:CGRectMake(56, 55, 154, 154)];
     NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[[jsonSuggestion objectForKey:@"suggested"] objectForKey:@"img"]]];
@@ -221,15 +255,6 @@ int numero_sit = 1;
     [buttonNoMeGusta setTag:[id_artista intValue]];
     [buttonNoMeGusta addTarget:self action:@selector(unlike:) forControlEvents:UIControlEventTouchUpInside];
     
-    UIButton *derecha = [[UIButton alloc] initWithFrame:CGRectMake(305, 158, 6, 11)];
-    [derecha setBackgroundImage:[UIImage imageNamed:@"8_icon_DERECHA.png"]forState:UIControlStateNormal];
-    [_view_inside_scrollview addSubview:derecha];
-    [derecha addTarget:self action:@selector(mas:) forControlEvents:UIControlEventTouchUpInside];
-    
-    UIButton *izquierda = [[UIButton alloc] initWithFrame:CGRectMake(10, 158, 6, 11)];
-    [izquierda setBackgroundImage:[UIImage imageNamed:@"8_icon_IZQUIERDA.png"]forState:UIControlStateNormal];
-    [_view_inside_scrollview addSubview:izquierda];
-    [izquierda addTarget:self action:@selector(menos:) forControlEvents:UIControlEventTouchUpInside];
 }
 
 - (void) showSitio:(NSDictionary*)jsonSuggestion{
@@ -281,15 +306,21 @@ int numero_sit = 1;
     [buttonNoMeGusta setTag:[id_sitio intValue]];
     [buttonNoMeGusta addTarget:self action:@selector(unlikeSitio:) forControlEvents:UIControlEventTouchUpInside];
     
-    UIButton *derecha = [[UIButton alloc] initWithFrame:CGRectMake(305, 470, 6, 11)];
-    [derecha setBackgroundImage:[UIImage imageNamed:@"8_icon_DERECHA.png"]forState:UIControlStateNormal];
-    [_view_inside_scrollview addSubview:derecha];
-    [derecha addTarget:self action:@selector(masSitios:) forControlEvents:UIControlEventTouchUpInside];
+}
+
+
+-(void)verSitio:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sitio"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
     
-    UIButton *izquierda = [[UIButton alloc] initWithFrame:CGRectMake(10, 470, 6, 11)];
-    [izquierda setBackgroundImage:[UIImage imageNamed:@"8_icon_IZQUIERDA.png"]forState:UIControlStateNormal];
-    [_view_inside_scrollview addSubview:izquierda];
-    [izquierda addTarget:self action:@selector(menosSitios:) forControlEvents:UIControlEventTouchUpInside];
 }
 
 -(void)verArtista:(UIButton*)sender
@@ -300,20 +331,10 @@ int numero_sit = 1;
     [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
     NSInteger id_art = sender.tag;
     fichaController.id_card = id_art;
-    fichaController.kind = 0;
-    [self presentViewController:fichaController animated:YES completion:nil];
-}
-
--(void)verSitio:(UIButton*)sender
-{
-    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
-                                                         bundle:nil];
-    fichaViewController *fichaController =
-    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
-    NSInteger id_art = sender.tag;
-    fichaController.id_card = id_art;
-    fichaController.kind = 1;
-    [self presentViewController:fichaController animated:YES completion:nil];
+    fichaController.kind = [utils getKind:@"Artist"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
 }
 
 - (IBAction)back:(id)sender {
@@ -330,14 +351,7 @@ int numero_sit = 1;
         if (!error) {
             [self showArtistas:true];
         } else {
-            // Error hacer el like
-            NSLog(@"Error al like: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -360,14 +374,7 @@ int numero_sit = 1;
         if (!error) {
             [self showArtistas:true];
         } else {
-            // Error hacer el like
-            NSLog(@"Error al like: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -382,14 +389,7 @@ int numero_sit = 1;
         if (!error) {
             [self showSitios:true];
         } else {
-            // Error hacer el like
-            NSLog(@"Error al like: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -412,14 +412,7 @@ int numero_sit = 1;
         if (!error) {
             [self showSitios:true];
         } else {
-            // Error hacer el like
-            NSLog(@"Error al like: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -436,9 +429,6 @@ int numero_sit = 1;
         primer_suggest =@"place_1";
         segundo_suggest =@"place_2";
     }
-    NSLog(@"PRIMER SUGGEST %@", jsonArtista);
-    NSLog(@"PRIMER SUGGEST %@", primer_suggest);
-    NSLog(@"PRIMER SUGGEST %@", [[jsonArtista objectForKey:primer_suggest]objectForKey:@"name"]);
     returnString = [returnString stringByAppendingString:[[jsonArtista objectForKey:primer_suggest]objectForKey:@"name"]];
     returnString = [returnString stringByAppendingString:@" Y "];
     returnString = [returnString stringByAppendingString:[[jsonArtista objectForKey:segundo_suggest]objectForKey:@"name"]];
@@ -491,13 +481,13 @@ int numero_sit = 1;
 
 #pragma mark - radial menu delegate methods
 - (NSInteger) numberOfItemsInRadialMenu:(ALRadialMenu *)radialMenu {
-    return 3;
+    return 2;
 }
 
 
 - (NSInteger) arcSizeForRadialMenu:(ALRadialMenu *)radialMenu {
     //Tamaño en grados de lo que ocupa el menu
-    return 65;
+    return 40;
 }
 
 
@@ -517,8 +507,6 @@ int numero_sit = 1;
 			return [UIImage imageNamed:@"1_ACTUALIDAD"];
 		} else if (index == 2) {
 			return [UIImage imageNamed:@"1_AGENDA"];
-		} else if (index == 3) {
-			return [UIImage imageNamed:@"1_SORTEOS"];
 		}
         
 	}
@@ -546,13 +534,6 @@ int numero_sit = 1;
             
             [self.navigationController pushViewController:agendaController animated:YES];
 			
-		} else if (index == 3) {
-            //Se hace click en el label de sorteos
-            
-            sorteosIndexViewController *sorteosController =
-            [storyboard instantiateViewControllerWithIdentifier:@"sorteosIndexViewController"];
-            
-            [self.navigationController pushViewController:sorteosController animated:YES];
 		}
 	}
 }
@@ -564,7 +545,161 @@ int numero_sit = 1;
 - (IBAction)menuButton:(id)sender {
 }
 
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
+}
 
+- (IBAction)buscar:(id)sender {
+    _textViewBuscar.text = @"";
+    ultima_busqueda_descubrir = @"";
+    if(_scrollView.userInteractionEnabled){
+        _scrollView.userInteractionEnabled = FALSE;
+    }
+    else{
+        _scrollView.userInteractionEnabled = TRUE;
+    }
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 140;
+    newFrame.size.height = 54;
+    _viewBuscar.frame = newFrame;
+    if(_viewBuscar.hidden){
+        _viewBuscar.hidden = FALSE;
+    }
+    else{
+        _viewBuscar.hidden = TRUE;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            _viewBuscar.hidden = TRUE;
+        }
+    }
+    
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)theTextField {
+    if (theTextField == self.textViewBuscar) {
+        [theTextField resignFirstResponder];
+    }
+    return YES;
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event{
+    //hides keyboard when another part of layout was touched
+    [self.view endEditing:YES];
+    [super touchesBegan:touches withEvent:event];
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+    _scrollView.userInteractionEnabled = TRUE;
+}
+
+- (IBAction)textFieldDidBeginEditing:(id)sender {
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 310;
+    _viewBuscar.frame = newFrame;
+}
+
+- (IBAction)textFieldDidEndEditing:(UITextField *)sender
+{
+    if(![ultima_busqueda_descubrir isEqualToString:_textViewBuscar.text]){
+        [self buscar];
+        CGRect newFrame = _viewBuscar.frame;
+        newFrame.origin.y = DEVICE_SIZE.height - 270;
+        newFrame.size.height = 180;
+        _viewBuscar.frame = newFrame;
+    }
+}
+
+- (void) buscar
+{
+    sesion *s = [sesion sharedInstance];
+    if(![ultima_busqueda_descubrir isEqualToString:_textViewBuscar.text]){
+        ultima_busqueda_descubrir = _textViewBuscar.text;
+        [[articles_dao sharedInstance] search:s.codigo_conexion q:_textViewBuscar.text limit:@5 page:@0 y:^(NSArray *articles, NSError *error) {
+            if (!error) {
+                UIScrollView* scrollViewSearch = [[UIScrollView alloc] initWithFrame:CGRectMake(0, DEVICE_SIZE.height - 54 - 166, 320, 130)];
+                scrollViewSearch.tag = 50;
+                [scrollViewSearch setBackgroundColor: [UIColor colorWithRed:37.0/255.0f green:37.0/255.0f blue:37.0/255.0f alpha:1]];
+                int i = 0;
+                NSValue *irArtistas = [NSValue valueWithPointer:@selector(verArtista2:)];
+                NSValue *irSitio = [NSValue valueWithPointer:@selector(verSitio2:)];
+                NSValue *irSello = [NSValue valueWithPointer:@selector(verSello:)];
+                for (NSDictionary *JSONnoteData in articles) {
+                    [constructorVistas dibujarResultadoEnPosicion:JSONnoteData en:scrollViewSearch posicion:i selectorArtista:irArtistas selectorSitio:irSitio selectorSello:irSello controllerBase:self];
+                    i++;
+                    numero_resultados_descubrir++;
+                }
+                
+                [self autoWidthScrollView:scrollViewSearch];
+                [self.view addSubview:scrollViewSearch];
+                numero_resultados_descubrir = 0;
+                
+            } else {
+            }
+        }];
+    }
+}
+
+- (void) autoWidthScrollView:(UIScrollView*)scrollViewBusqueda{
+    CGFloat scrollViewWidth = 0.0f;
+    for (UIView* view in scrollViewBusqueda.subviews)
+    {
+        scrollViewWidth += view.frame.size.width+10;
+    }
+    [scrollViewBusqueda setContentSize:(CGSizeMake(scrollViewWidth, 130))];
+}
+
+-(void)verSitio2:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sitio"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verSello:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sello"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verArtista2:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Artist"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
 
 /*
  #pragma mark - Navigation

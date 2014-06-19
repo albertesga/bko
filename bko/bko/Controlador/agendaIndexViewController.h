@@ -10,10 +10,11 @@
 #import <CoreLocation/CoreLocation.h>
 #import "ALRadialMenu.h"
 #import "ALRadialButton.h"
+#import "SWRevealViewController.h"
 
-@interface agendaIndexViewController : UIViewController <UIScrollViewDelegate,CLLocationManagerDelegate,ALRadialMenuDelegate> {
+@interface agendaIndexViewController : UIViewController <SWRevealViewControllerDelegate,UIScrollViewDelegate,CLLocationManagerDelegate,ALRadialMenuDelegate,UIGestureRecognizerDelegate> {
     CLLocationManager *locationManager;
 }
     @property (strong, nonatomic) ALRadialMenu *radialMenu;
-
+    @property (assign) NSInteger dia;
 @end

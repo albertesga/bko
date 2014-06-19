@@ -13,6 +13,10 @@
 #import "articles_dao.h"
 #import "actualidadDetalleViewController.h"
 #import "sesion.h"
+#import "fichaViewController.h"
+#import "utils.h"
+#import "sinConexionViewController.h"
+#import "constructorVistas.h"
 
 @interface actualidadIndexViewController ()
 @property (weak, nonatomic) IBOutlet UIButton *menu_button;
@@ -22,15 +26,22 @@
 @property (weak, nonatomic) IBOutlet UIActivityIndicatorView *activity_indicator;
 @property (weak, nonatomic) IBOutlet UIImageView *image_barra;
 @property (weak, nonatomic) IBOutlet UIButton *buscar_button;
-@property (weak, nonatomic) IBOutlet UIBarButtonItem *leftButton;
+@property (weak, nonatomic) IBOutlet UIView *viewBuscar;
+@property (weak, nonatomic) IBOutlet UITextField *textViewBuscar;
+@property (strong, nonatomic) IBOutlet UIView *viewGeneral;
 @end
 
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
 
 @implementation actualidadIndexViewController
 
+NSLayoutConstraint *constrainBAux;
 int numero_articulos = 0;
+int numero_resultados = 0;
+NSString* ultima_busqueda = @"";
+bool didLoadDone = false;
 #define limit_paginate ((int) 50)
+#define DEVICE_SIZE [[[[UIApplication sharedApplication] keyWindow] rootViewController].view convertRect:[[UIScreen mainScreen] bounds] fromView:nil].size
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
 {
@@ -43,12 +54,14 @@ int numero_articulos = 0;
 
 - (void)viewDidLoad
 {
-    
+    didLoadDone = true;
     [super viewDidLoad];
-    
+    [self conectado];
     [self.navigationItem setHidesBackButton:YES];
+    self.navigationController.navigationBar.backgroundColor = [[UIColor alloc] initWithRed:0.0 green:0.0 blue:0.0 alpha:0.7];
     
     numero_articulos = 0;
+    numero_resultados = 0;
     //Menu Radial
     self.radialMenu = [[ALRadialMenu alloc] init];
 	self.radialMenu.delegate = self;
@@ -56,16 +69,75 @@ int numero_articulos = 0;
     //Menu Lateral
     [self.menu_lateral_button setTarget: self.revealViewController];
     [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
-    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
-    self.revealViewController.rightViewRevealWidth = 118;
+    [self.revealViewController panGestureRecognizer];
+    [self.revealViewController tapGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 180;
+    self.revealViewController.delegate = self;
     
     self.scrollView.delegate = self;
+    [_viewBuscar setTranslatesAutoresizingMaskIntoConstraints:YES];
+    self.textViewBuscar.delegate=self;
+    
     [self showArticulos];
 }
 
-- (void)viewWillAppear:(BOOL)animated
+- (void)viewWillDisappear:(BOOL)animated{
+    if(!_degradado_menu.hidden){
+    [self.radialMenu buttonsWillAnimateFromButton:_menu_button withFrame:self.menu_button.frame inView:self.view];
+    [UIView transitionWithView:_degradado_menu
+                      duration:0.8
+                       options:
+     UIViewAnimationOptionTransitionCrossDissolve
+                    animations:NULL
+                    completion:NULL];
+        _degradado_menu.hidden = true;
+    }
+    
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+    
+}
+
+-(void)resetView
 {
-    numero_articulos = 0;
+    if(!didLoadDone){
+        self.view=nil;
+        [self viewDidLoad];
+    }
+    
+}
+
+-(void)viewWillAppear:(BOOL)animated
+{
+    [self resetView];
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (scrollView.contentOffset.y < -30) {
+        scrollView.contentOffset = CGPointMake(0, -30);
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController willMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController didMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
 }
 
 -(void)showArticulos{
@@ -85,6 +157,7 @@ int numero_articulos = 0;
             [self autoHeight];
         } else {
             // Error processing
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -113,6 +186,8 @@ int numero_articulos = 0;
     sesion *s = [sesion sharedInstance];
     NSNumber *desde = [NSNumber numberWithInteger:numero_articulos];
     NSNumber *hasta = [NSNumber numberWithInteger:limit_paginate];
+    NSLog(@"DESDE %@",desde);
+    NSLog(@"HASTA %@",hasta);
     [[articles_dao sharedInstance] getArticlesOnCompletion:s.codigo_conexion limit:hasta page:desde y:^(NSArray *articles, NSError *error) {
         if (!error) {
             //desde = [NSNumber numberWithInt:([desde integerValue] + [articles count])];
@@ -124,6 +199,7 @@ int numero_articulos = 0;
             [self autoHeight];
         } else {
             // Error processing
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -131,19 +207,23 @@ int numero_articulos = 0;
 -(void) dibujarArticuloEnPosicion:(NSDictionary *)json{
     int fila = (numero_articulos/2);
     int columna = numero_articulos%2;
-    int y = 157*fila + 3;
-    int x = 3;
+    int y = 159*fila;
+    int x = 0;
     if(columna == 1){
-        x = x + 160;
+        x = x + 161;
     }
     numero_articulos++;
-    UIView *articuloView=[[UIView alloc]initWithFrame:CGRectMake(x, y, 154, 154)];
+    UIView *articuloView=[[UIView alloc]initWithFrame:CGRectMake(x, y, 159, 159)];
     [articuloView setBackgroundColor:[UIColor clearColor]];
     [_scrollView addSubview:articuloView];
     
-    UIButton *buttonActualidad = [[UIButton alloc] initWithFrame:CGRectMake(4, 4, 146, 146)];
-    NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[json valueForKey:@"list_img"]]];
-    [buttonActualidad setBackgroundImage:[UIImage imageWithData:imageData] forState:UIControlStateNormal];
+    UIButton *buttonActualidad = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 159, 159)];
+    
+    [utils downloadImageWithURL:[NSURL URLWithString:[json valueForKey:@"list_img"]] completionBlock:^(BOOL succeeded, UIImage *image) {
+        if (succeeded) {
+            [buttonActualidad setBackgroundImage:image forState:UIControlStateNormal];
+        }
+    }];
     [articuloView addSubview:buttonActualidad];
     
     NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
@@ -153,16 +233,15 @@ int numero_articulos = 0;
     
     [buttonActualidad addTarget:self action:@selector(detallesActualidad:) forControlEvents:UIControlEventTouchUpInside];
     
-    UIImageView *fondo_box = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 154, 154)];
-    [fondo_box setImage:[UIImage imageNamed:@"IMATGE.png"]];
+    UIImageView *fondo_box = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 159, 159)];
     [articuloView addSubview:fondo_box];
     [articuloView sendSubviewToBack:fondo_box];
     
-    UIImageView *imagen_fondo_box = [[UIImageView alloc] initWithFrame:CGRectMake(3, 124, 148, 26)];
+    UIImageView *imagen_fondo_box = [[UIImageView alloc] initWithFrame:CGRectMake(0, 133, 159, 26)];
     [imagen_fondo_box setImage:[UIImage imageNamed:@"FONDO_IMAGEN.png"]];
     [articuloView addSubview:imagen_fondo_box];
     
-    UILabel *tituloActualidad = [[UILabel alloc] initWithFrame:CGRectMake(5, 127, 149, 21)];
+    UILabel *tituloActualidad = [[UILabel alloc] initWithFrame:CGRectMake(0, 135, 159, 21)];
     [articuloView addSubview:tituloActualidad];
     tituloActualidad.text=[json valueForKey:@"list_title"];
     tituloActualidad.textColor=[UIColor whiteColor];
@@ -186,7 +265,7 @@ int numero_articulos = 0;
     [storyboard instantiateViewControllerWithIdentifier:@"actualidadDetalleViewController"];
     NSInteger id_articulo = sender.tag;
     actualidadController.id_articulo = id_articulo;
-    [self.navigationController pushViewController:actualidadController animated:YES ];
+    [self.navigationController pushViewController:actualidadController animated:NO ];
 }
 
 - (void)didReceiveMemoryWarning
@@ -221,13 +300,13 @@ int numero_articulos = 0;
 
 #pragma mark - radial menu delegate methods
 - (NSInteger) numberOfItemsInRadialMenu:(ALRadialMenu *)radialMenu {
-		return 3;
+		return 2;
 }
 
 
 - (NSInteger) arcSizeForRadialMenu:(ALRadialMenu *)radialMenu {
     //Tamaño en grados de lo que ocupa el menu
-    return 65;
+    return 40;
 }
 
 
@@ -247,8 +326,6 @@ int numero_articulos = 0;
 			return [UIImage imageNamed:@"1_ACTUALIDAD"];
 		} else if (index == 2) {
 			return [UIImage imageNamed:@"1_AGENDA"];
-		} else if (index == 3) {
-			return [UIImage imageNamed:@"1_SORTEOS"];
 		}
 
 	}
@@ -267,28 +344,189 @@ int numero_articulos = 0;
 			
 		} else if (index == 2) {
             //Se hace click en el label de agenda
-            
             agendaIndexViewController *agendaController =
             [storyboard instantiateViewControllerWithIdentifier:@"agendaIndexViewController"];
             
             [self.navigationController pushViewController:agendaController animated:YES];
 			
-		} else if (index == 3) {
-            //Se hace click en el label de sorteos
-            
-            sorteosIndexViewController *sorteosController =
-            [storyboard instantiateViewControllerWithIdentifier:@"sorteosIndexViewController"];
-            
-            [self.navigationController pushViewController:sorteosController animated:YES];
 		}
 	}
 }
 
 - (void)itemsWillDisapearIntoButton:(UIButton *)button{
-_degradado_menu.hidden = true;
+    _degradado_menu.hidden = true;
 }
 
-- (IBAction)menuButton:(id)sender {
+- (IBAction)buscar:(id)sender {
+    _textViewBuscar.text = @"";
+    ultima_busqueda = @"";
+    if(_scrollView.userInteractionEnabled){
+        _scrollView.userInteractionEnabled = FALSE;
+    }
+    else{
+        _scrollView.userInteractionEnabled = TRUE;
+    }
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 140;
+    newFrame.size.height = 54;
+    _viewBuscar.frame = newFrame;
+    if(_viewBuscar.hidden){
+        _viewBuscar.hidden = FALSE;
+    }
+    else{
+        _viewBuscar.hidden = TRUE;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            _viewBuscar.hidden = TRUE;
+        }
+    }
+    
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)theTextField {
+    if (theTextField == self.textViewBuscar) {
+        [theTextField resignFirstResponder];
+    }
+    return YES;
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event{
+    //hides keyboard when another part of layout was touched
+    [self.view endEditing:YES];
+    [super touchesBegan:touches withEvent:event];
+    //_viewBuscar.hidden = FALSE;
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+    _scrollView.userInteractionEnabled = TRUE;
+}
+
+
+- (IBAction)textFieldDidBeginEditing:(id)sender {
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 310;
+    _viewBuscar.frame = newFrame;
+}
+
+- (IBAction)textFieldDidEndEditing:(UITextField *)sender
+{
+    if(![ultima_busqueda isEqualToString:_textViewBuscar.text]){
+        [self buscar];
+        CGRect newFrame = _viewBuscar.frame;
+        newFrame.origin.y = DEVICE_SIZE.height - 265;
+        newFrame.size.height = 180;
+        _viewBuscar.frame = newFrame;
+        [self.view bringSubviewToFront:_activity_indicator];
+    }
+}
+
+- (void) buscar
+{
+    [_activity_indicator startAnimating];
+    _activity_indicator.hidden = FALSE;
+    sesion *s = [sesion sharedInstance];
+    if(![ultima_busqueda isEqualToString:_textViewBuscar.text]){
+        ultima_busqueda = _textViewBuscar.text;
+        [[articles_dao sharedInstance] search:s.codigo_conexion q:_textViewBuscar.text limit:@5 page:@0 y:^(NSArray *articles, NSError *error) {
+            if (!error) {
+                UIScrollView* scrollViewSearch = [[UIScrollView alloc] initWithFrame:CGRectMake(0, DEVICE_SIZE.height - 54 - 160, 320, 130)];
+                scrollViewSearch.tag = 50;
+                [scrollViewSearch setBackgroundColor: [UIColor colorWithRed:37.0/255.0f green:37.0/255.0f blue:37.0/255.0f alpha:1]];
+                int i = 0;
+                NSValue *irArtistas = [NSValue valueWithPointer:@selector(verArtista:)];
+                NSValue *irSitio = [NSValue valueWithPointer:@selector(verSitio:)];
+                NSValue *irSello = [NSValue valueWithPointer:@selector(verSello:)];
+                for (NSDictionary *JSONnoteData in articles) {
+                    [constructorVistas dibujarResultadoEnPosicion:JSONnoteData en:scrollViewSearch posicion:i selectorArtista:irArtistas selectorSitio:irSitio selectorSello:irSello controllerBase:self];
+                    i++;
+                    numero_resultados++;
+                }
+                [_activity_indicator stopAnimating];
+                _activity_indicator.hidden = TRUE;
+                
+                [self autoWidthScrollView:scrollViewSearch];
+                [self.view addSubview:scrollViewSearch];
+                numero_resultados = 0;
+                
+            } else {
+                [utils controlarErrores:error];
+            }
+        }];
+    }
+}
+
+- (void) autoWidthScrollView:(UIScrollView*)scrollViewBusqueda{
+    CGFloat scrollViewWidth = 0.0f;
+    for (UIView* view in scrollViewBusqueda.subviews)
+    {
+        scrollViewWidth += view.frame.size.width+10;
+    }
+    [scrollViewBusqueda setContentSize:(CGSizeMake(scrollViewWidth, 130))];
+}
+
+
+-(NSString *) stringByStrippingHTML {
+    NSRange r;
+    NSString *s = [self copy];
+    while ((r = [s rangeOfString:@"<[^>]+>" options:NSRegularExpressionSearch]).location != NSNotFound)
+        s = [s stringByReplacingCharactersInRange:r withString:@""];
+    return s;
+}
+
+-(void)verArtista:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Artist"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verSitio:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sitio"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verSello:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sello"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
 }
 
 /*

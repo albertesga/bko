@@ -8,6 +8,8 @@
 
 #import "mailEnviadoViewController.h"
 #import "backgroundAnimate.h"
+#import "utils.h"
+#import "sinConexionViewController.h"
 
 @interface mailEnviadoViewController ()
 @property (weak, nonatomic) IBOutlet UIImageView *backgroundImageView;
@@ -28,6 +30,7 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self conectado];
     // Do any additional setup after loading the view.
 }
 
@@ -60,6 +63,15 @@
     backgroundAnimate *background = [backgroundAnimate sharedInstance];
     [background animateBackground:self.backgroundImageView];
     [background applyCloudLayerAnimation];
+}
+
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
 }
 
 /*

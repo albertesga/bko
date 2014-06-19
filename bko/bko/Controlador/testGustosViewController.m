@@ -12,6 +12,7 @@
 #import "Artists.h"
 #import "backgroundAnimate.h"
 #import "utils.h"
+#import "sinConexionViewController.h"
 
 @interface testGustosViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *presiona_label;
@@ -61,28 +62,6 @@ int accion_usuario = 0;
                     }
                     NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
                     [f setNumberStyle:NSNumberFormatterDecimalStyle];
-                    /*for (NSDictionary* artist in artists_json) {
-                        UIView *view = b.superview;
-                        NSNumber *id_artist =[f numberFromString:[artist objectForKey:@"id"]];
-                        [view setTag:[id_artist intValue]];
-                        for(UIView *aux in view.subviews){
-                            if([aux isKindOfClass:[UILabel class]]){
-                                UILabel *label_artist = (UILabel*) aux;
-                                label_artist.text = [artist objectForKey:@"name"];
-                            }
-                            if([aux isKindOfClass:[UIButton class]]){
-                                UIButton *image = (UIButton*) aux;
-                                NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[artist objectForKey:@"list_img"]]];
-                                [image setBackgroundImage:[UIImage imageWithData:imageData] forState:UIControlStateNormal];
-                            }
-                        }
-                        b.superview.transform =CGAffineTransformMakeScale(0,0);
-                        [UIView animateWithDuration:0.8 animations:^{
-                            b.superview.alpha = 1.0;
-                            b.superview.transform =CGAffineTransformMakeScale(1.0,1.0);
-                        }];
-                    }*/
-                    NSLog(@"ENTRO %@",artists_json);
                     int i=0;
                     for (UIView* artist_view in _artistes) {
                         if([artists_json count] > i){
@@ -98,9 +77,11 @@ int accion_usuario = 0;
                                         label_artist.text = [artist objectForKey:@"name"];
                                     }
                                     if([aux isKindOfClass:[UIButton class]]){
+                                        NSData * imageData = [[NSData alloc] initWithContentsOfURL: [NSURL URLWithString: [artist objectForKey:@"list_img"]]];
+                                        
                                         UIButton *image = (UIButton*) aux;
-                                        NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[artist objectForKey:@"list_img"]]];
                                         [image setBackgroundImage:[UIImage imageWithData:imageData] forState:UIControlStateNormal];
+                                        [self.view bringSubviewToFront:image];
                                     }
                                 }
                                 artist_view.transform =CGAffineTransformMakeScale(0,0);
@@ -108,7 +89,6 @@ int accion_usuario = 0;
                                     artist_view.alpha = 1.0;
                                     artist_view.transform =CGAffineTransformMakeScale(1.0,1.0);
                                 }];
-                                [artist_view sendSubviewToBack:[artist_view.subviews lastObject]];
                         }
                         else{
                             artist_view.hidden= YES;
@@ -117,25 +97,13 @@ int accion_usuario = 0;
                     
                 } else {
                     // Error al recoger el artista
-                    NSLog(@"Error en la recogida de artistas: %@", error);
-                    UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                       message:[error localizedDescription]
-                                                                      delegate:self
-                                                             cancelButtonTitle:@"OK"
-                                                             otherButtonTitles:nil];
-                    [theAlert show];
+                    [utils controlarErrores:error];
                 }
             }];
 
         } else {
             // Error hacer el like
-            NSLog(@"Error al hacer like: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -182,29 +150,14 @@ int accion_usuario = 0;
                                 artist_view.alpha = 1.0;
                                 artist_view.transform =CGAffineTransformMakeScale(1.0,1.0);
                             }];
-                            [artist_view sendSubviewToBack:[artist_view.subviews lastObject]];
                         }
                     } else {
-                        // Error al recoger el artista
-                        NSLog(@"Error al recoger artistas: %@", error);
-                        UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                           message:[error localizedDescription]
-                                                                          delegate:self
-                                                                 cancelButtonTitle:@"OK"
-                                                                 otherButtonTitles:nil];
-                        [theAlert show];
+                        [utils controlarErrores:error];
                     }
                 }];
                 
             } else {
-                // Error hacer el unlike
-                NSLog(@"Error al hacer unlike: %@", error);
-                UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                   message:[error localizedDescription]
-                                                                  delegate:self
-                                                         cancelButtonTitle:@"OK"
-                                                         otherButtonTitles:nil];
-                [theAlert show];
+                [utils controlarErrores:error];
             }
         }];
         }
@@ -217,54 +170,64 @@ int accion_usuario = 0;
     
     [super viewDidLoad];
     
-    sesion *s = [sesion sharedInstance];
-    for (UIView* artist_view in _artistes) {
-        artist_view.alpha = 0.0;
-    }
-                
-                NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
-                [f setNumberStyle:NSNumberFormatterDecimalStyle];
-                [[register_dao sharedInstance] getPossibleArtistsLiked:s.codigo_conexion limit:@4 page:@1 y:^(NSArray *artists, NSError *error) {
-                    if (!error) {
-                        int i =0;
-                        for (NSDictionary* artist in artists) {
-                            UIView *view = [_artistes objectAtIndex:i];
-                            NSNumber *id_artist =[f numberFromString:[artist objectForKey:@"id"]];
-                            [view setTag:[id_artist intValue]];
-                            for(UIView *aux in view.subviews){
-                                if([aux isKindOfClass:[UILabel class]]){
-                                    UILabel *label_artist = (UILabel*) aux;
-                                    label_artist.text = [artist objectForKey:@"name"];
-                                    label_artist.font = FONT_BEBAS(17.0f);
-                                }
-                                if([aux isKindOfClass:[UIButton class]]){
-                                    UIButton *image = (UIButton*) aux;
-                                    NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[artist objectForKey:@"list_img"]]];
-                                    [image setBackgroundImage:[UIImage imageWithData:imageData] forState:UIControlStateNormal];
-                                }
+    [self conectado];
+    
+    NSDictionary* user_pass = [utils retriveUsernamePassword];
+    [[register_dao sharedInstance] login:[user_pass objectForKey:@"username"] password:[user_pass objectForKey:@"password"] token:nil y:^(NSArray *connection, NSError *error) {
+        if (!error) {
+            sesion *s = [sesion sharedInstance];
+            NSDictionary* con = [connection objectAtIndex:0];
+            s.codigo_conexion = [[con objectForKey:@"connection"] objectForKey:@"code"];
+            
+            //sesion *s = [sesion sharedInstance];
+            for (UIView* artist_view in _artistes) {
+                artist_view.alpha = 0.0;
+            }
+            
+            NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
+            [f setNumberStyle:NSNumberFormatterDecimalStyle];
+            [[register_dao sharedInstance] getPossibleArtistsLiked:s.codigo_conexion limit:@4 page:@1 y:^(NSArray *artists, NSError *error) {
+                if (!error) {
+                    int i =0;
+                    for (NSDictionary* artist in artists) {
+                        UIView *view = [_artistes objectAtIndex:i];
+                        NSNumber *id_artist =[f numberFromString:[artist objectForKey:@"id"]];
+                        [view setTag:[id_artist intValue]];
+                        for(UIView *aux in view.subviews){
+                            if([aux isKindOfClass:[UILabel class]]){
+                                UILabel *label_artist = (UILabel*) aux;
+                                label_artist.text = [artist objectForKey:@"name"];
+                                label_artist.font = FONT_BEBAS(17.0f);
                             }
-                            view.transform =CGAffineTransformMakeScale(0,0);
-                            [UIView animateWithDuration:0.8 animations:^{
-                                view.alpha = 1.0;
-                                view.transform =CGAffineTransformMakeScale(1.0,1.0);
-                            }];
-                            [view sendSubviewToBack:[view.subviews lastObject]];
-                            i++;
+                            if([aux isKindOfClass:[UIButton class]]){
+                                UIButton *image = (UIButton*) aux;
+                                NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[artist objectForKey:@"list_img"]]];
+                                [image setBackgroundImage:[UIImage imageWithData:imageData] forState:UIControlStateNormal];
+                            }
                         }
-                    } else {
-                        // Error processing
-                        NSLog(@"Error recogiendo artistas: %@", error);
-                        UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                           message:[error localizedDescription]
-                                                                          delegate:self
-                                                                 cancelButtonTitle:@"OK"
-                                                                 otherButtonTitles:nil];
-                        [theAlert show];
+                        view.transform =CGAffineTransformMakeScale(0,0);
+                        [UIView animateWithDuration:0.8 animations:^{
+                            view.alpha = 1.0;
+                            view.transform =CGAffineTransformMakeScale(1.0,1.0);
+                        }];
+                        [view sendSubviewToBack:[view.subviews lastObject]];
+                        i++;
                     }
-                }];
+                } else {
+                    [utils controlarErrores:error];
+                }
+            }];
+            
+            _presiona_label.font = FONT_BEBAS(14.0f);
+
+        } else {
+            [utils controlarErrores:error];
+        }
+    }];
     
     
-    _presiona_label.font = FONT_BEBAS(14.0f);
+    
+    
     
     
 }
@@ -305,6 +268,15 @@ int accion_usuario = 0;
     backgroundAnimate *background = [backgroundAnimate sharedInstance];
     [background animateBackground:self.backgroundImageView];
     [background applyCloudLayerAnimation];
+}
+
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
 }
 
 /*

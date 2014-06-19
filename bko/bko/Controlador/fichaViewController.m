@@ -17,6 +17,9 @@
 #import "actualidadIndexViewController.h"
 #import "agendaIndexViewController.h"
 #import "sorteosIndexViewController.h"
+#import "sinConexionViewController.h"
+
+
 
 @interface fichaViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *titulo_barra_superior;
@@ -35,6 +38,8 @@
 @property (weak, nonatomic) IBOutlet NSLayoutConstraint *altura_scroll;
 @property (weak, nonatomic) IBOutlet UIImageView *degradado_menu;
 @property (weak, nonatomic) IBOutlet UIButton *menu_button;
+@property (weak, nonatomic) IBOutlet UITextField *textViewBuscar;
+@property (weak, nonatomic) IBOutlet UIView *viewBuscar;
 
 @end
 
@@ -49,6 +54,9 @@ NSString *instagram_link;
 NSString *souncloud_link;
 NSNumber *kind_c;
 NSNumber *id_c;
+int numero_resultados_ficha = 0;
+NSString* ultima_busqueda_ficha = @"";
+#define DEVICE_SIZE [[[[UIApplication sharedApplication] keyWindow] rootViewController].view convertRect:[[UIScreen mainScreen] bounds] fromView:nil].size
 
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
 
@@ -65,9 +73,13 @@ NSNumber *id_c;
 {
 
     [super viewDidLoad];
+    [self conectado];
     
     kind_c = [[NSNumber alloc] initWithInt:kind];
     id_c = [[NSNumber alloc] initWithInt:id_card];
+    
+    [_viewBuscar setTranslatesAutoresizingMaskIntoConstraints:YES];
+    self.textViewBuscar.delegate=self;
     
     //Menu Radial
     self.radialMenu = [[ALRadialMenu alloc] init];
@@ -78,11 +90,17 @@ NSNumber *id_c;
     _tipo_ficha_label.font = FONT_BEBAS(15.0f);
     _info_label.font = FONT_BEBAS(15.0f);
     
+    self.imageViews = [[NSMutableArray alloc] init];
+    self.mediaFocusManager = [[ASMediaFocusManager alloc] init];
+    self.mediaFocusManager.delegate = self;
+    
     //Menu Lateral
     [self.menu_lateral_button setTarget: self.revealViewController];
     [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
-    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
-    self.revealViewController.rightViewRevealWidth = 118;
+    [self.revealViewController panGestureRecognizer];
+    [self.revealViewController tapGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 180;
+    self.revealViewController.delegate = self;
     
 
         sesion *s = [sesion sharedInstance];
@@ -106,17 +124,47 @@ NSNumber *id_c;
                 [self construir_contenido:card_json];
                 [self colocar_iconos_redes_sociales:card_json];
             } else {
-                // Error hacer al recoger Artículo
-                NSLog(@"Error al recoger el card: %@", error);
-                UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                   message:[error localizedDescription]
-                                                                  delegate:self
-                                                         cancelButtonTitle:@"OK"
-                                                         otherButtonTitles:nil];
-                [theAlert show];
+                [utils controlarErrores:error];
             }
         }];
     
+}
+
+- (void)viewWillDisappear:(BOOL)animated{
+    if(!_degradado_menu.hidden){
+        [self.radialMenu buttonsWillAnimateFromButton:_menu_button withFrame:self.menu_button.frame inView:self.view];
+        [UIView transitionWithView:_degradado_menu
+                          duration:0.8
+                           options:
+         UIViewAnimationOptionTransitionCrossDissolve
+                        animations:NULL
+                        completion:NULL];
+        _degradado_menu.hidden = true;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+}
+
+- (void)revealController:(SWRevealViewController *)revealController willMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController didMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
 }
 
 - (IBAction)anadir_mis_gustos:(id)sender {
@@ -134,14 +182,7 @@ NSNumber *id_c;
             UITapGestureRecognizer *tapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self  action:@selector(esconder_modals)];
             [_anadido_modal addGestureRecognizer:tapRecognizer];
         } else {
-            // Error hacer el like
-            NSLog(@"Error al like: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 
@@ -166,14 +207,7 @@ NSNumber *id_c;
             [_ya_no_te_gusta_modal addGestureRecognizer:tapRecognizer];
 
         } else {
-            // Error hacer el unlike
-            NSLog(@"Error al hacer unlike: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -214,10 +248,6 @@ NSNumber *id_c;
             codigo_sin_corchetes = [codigo_sin_corchetes substringToIndex:codigo_sin_corchetes.length -2];
             for(NSDictionary* json in [[json_content objectForKey:@"content"] objectForKey:@"content_gallery_embeds"]){
                 if([[json valueForKey:@"code"] isEqualToString:codigo_sin_corchetes]){
-                    if([json valueForKey:@"name"] != nil && ![[json valueForKey:@"name"] isEqualToString:@""]){
-                        [_view_scroll addSubview:[constructorVistas construirTitulo:[json objectForKey:@"name"] poscion:y]];
-                        y = y+30;
-                    }
                     [_view_scroll addSubview:[constructorVistas construir_scroll_embeds:json posicion:y]];
                     y = y+150;
                 }
@@ -225,44 +255,61 @@ NSNumber *id_c;
             
             for(NSDictionary* json in [[json_content objectForKey:@"content"] objectForKey:@"content_gallery_images"]){
                 if([[json valueForKey:@"code"] isEqualToString:codigo_sin_corchetes]){
-                    if([json valueForKey:@"name"] != nil && ![[json valueForKey:@"name"] isEqualToString:@""]){
-                        [_view_scroll addSubview:[constructorVistas construirTitulo:[json objectForKey:@"name"] poscion:y]];
-                        y = y+30;
-                    }
-                    [_view_scroll addSubview:[constructorVistas construir_scroll_images:json posicion:y]];
+                    [_view_scroll addSubview:[self construir_scroll_images:json posicion:y]];
                     y = y+150;
                 }
             }
         }
-        else if(![x isEqualToString:@""]){
-            /*UIWebView* myUIWebView = [[UIWebView alloc] initWithFrame:CGRectMake(0, y, 320, 400)];
-            [myUIWebView setUserInteractionEnabled:NO];
-            [myUIWebView setBackgroundColor:[UIColor colorWithRed:233/255.0f green:233/255.0f blue:233/255.0f alpha:1.0]];
-            [myUIWebView loadHTMLString:x baseURL:nil];
-            [myUIWebView sizeToFit];
-             y = y + myTextView.frame.size.height;
-             [_view_scroll addSubview:myTextView];*/
-            UITextView *myTextView = [[UITextView alloc] initWithFrame:CGRectMake(0, y, 320, 400)];
-            [myTextView setUserInteractionEnabled:NO];
-            [myTextView setBackgroundColor:[UIColor colorWithRed:233/255.0f green:233/255.0f blue:233/255.0f alpha:1.0]];
-            NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithData:[x dataUsingEncoding:NSUnicodeStringEncoding] options:@{ NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType } documentAttributes:nil error:nil];
-            
-            UIFont *font=[UIFont fontWithName:@"Arial-BoldMT" size:13.0f];
-            NSMutableParagraphStyle *paragrapStyle = [[NSMutableParagraphStyle alloc] init];
-            paragrapStyle.alignment = NSTextAlignmentCenter;
-            NSInteger stringLength=[attributedString length];
-            [attributedString addAttribute:NSFontAttributeName value:font range:NSMakeRange(0, stringLength)];
-            [attributedString addAttribute:NSParagraphStyleAttributeName value:paragrapStyle range:NSMakeRange(0, stringLength)];
-            
-            
-            myTextView.attributedText = attributedString;
-            [myTextView sizeToFit];
-            y = y + myTextView.frame.size.height;
-            [_view_scroll addSubview:myTextView];
+        else if(![x isEqualToString:@""] && ![x isEqualToString:@"</p>"]){
+            UIWebView *myWebView = [[UIWebView alloc] initWithFrame:CGRectMake(0, y, 320, 400)];
+            [myWebView setBackgroundColor:[UIColor colorWithRed:233/255.0f green:233/255.0f blue:233/255.0f alpha:1.0]];
+            NSString *myDescriptionHTML = [NSString stringWithFormat:@"<html> \n"
+                                           "<head><style type=\"text/css\">body{font-family: \"%@\";color: #555555;text-align: center;}p{color:#555555;font-size: 14px;font-weight: bold;}strong{color:#037c61;}a{color: #037c61;text-decoration: underline;}</style></head><body>%@</body></html>", @"Arial-BoldMT", x];
+            [myWebView loadHTMLString:myDescriptionHTML baseURL:nil];
+            [myWebView setDelegate:self];
+            y = y + myWebView.frame.size.height;
+            [_view_scroll addSubview:myWebView];
         }
     }
     [self autoHeight];
     [self show_items_relacionados:json_content];
+}
+
+- (void) webViewDidFinishLoad:(UIWebView *)webView
+{
+    CGRect frame = webView.frame;
+    CGSize fittingSize = [webView sizeThatFits:webView.scrollView.contentSize];
+    frame.size = fittingSize;
+    webView.frame = frame;
+    [self ordenar_vistas];
+}
+
+- (void)ordenar_vistas{
+    int y = 484;
+    for(UIView* v in _view_scroll.subviews){
+        if([v isKindOfClass:[UIWebView class]]){
+            CGRect newFrame = v.frame;
+            newFrame.origin.y = y;
+            v.frame = newFrame;
+            y = y + v.frame.size.height;
+        }
+        else if([v isKindOfClass:[UIScrollView class]] || [v isKindOfClass:[UITextView class]]){
+            CGRect newFrame = v.frame;
+            newFrame.origin.y = y;
+            v.frame = newFrame;
+            y = y + v.frame.size.height + 6;
+        }
+        
+    }
+}
+
+-(BOOL) webView:(UIWebView *)inWeb shouldStartLoadWithRequest:(NSURLRequest *)inRequest navigationType:(UIWebViewNavigationType)inType {
+    if ( inType == UIWebViewNavigationTypeLinkClicked ) {
+        [[UIApplication sharedApplication] openURL:[inRequest URL]];
+        return NO;
+    }
+    
+    return YES;
 }
 
 - (void)embeds_finales:(NSDictionary*)json_content{
@@ -283,11 +330,12 @@ NSNumber *id_c;
             y = y + 15;
             [_view_scroll addSubview:[constructorVistas construirTitulo:[json objectForKey:@"name"] poscion:y]];
             y = y + 30;
-            [_view_scroll addSubview:[constructorVistas construir_scroll_images:json posicion:y]];
+            [_view_scroll addSubview:[self construir_scroll_images:json posicion:y]];
             y = y + 150;
         }
     }
     [self autoHeight];
+    [self ordenar_vistas];
 }
 
 - (void)show_items_relacionados:(NSDictionary*)json_content{
@@ -329,7 +377,7 @@ NSNumber *id_c;
                                     if([sellos count]>0){
                                         [_view_scroll addSubview:[constructorVistas construirTitulo:@"Sellos Relacionados" poscion:self.altura_scroll.constant]];
                                         NSValue *irSellos = [NSValue valueWithPointer:@selector(verSello:)];
-                                        [_view_scroll addSubview:[constructorVistas scrollLateralItemsPeques:articulos posicion:self.altura_scroll.constant selector:irSellos controllerBase:self]];
+                                        [_view_scroll addSubview:[constructorVistas scrollLateralItemsPeques:sellos posicion:self.altura_scroll.constant selector:irSellos controllerBase:self]];
                                         [self autoHeight];
                                     }
                                     NSNumber* tipo_entrevista = [[NSNumber alloc] initWithInt:[utils getKind:@"Entrevista"]];
@@ -338,64 +386,29 @@ NSNumber *id_c;
                                             if([entrevistas count]>0){
                                                 [_view_scroll addSubview:[constructorVistas construirTitulo:@"Entrevistas Relacionadas" poscion:self.altura_scroll.constant]];
                                                 NSValue *irArticulos = [NSValue valueWithPointer:@selector(verArticulo:)];
-                                                [_view_scroll addSubview:[constructorVistas scrollLateral:articulos posicion:self.altura_scroll.constant selector:irArticulos controllerBase:self]];
+                                                [_view_scroll addSubview:[constructorVistas scrollLateral:entrevistas posicion:self.altura_scroll.constant selector:irArticulos controllerBase:self]];
                                                 [self autoHeight];
                                             }
                                             [self embeds_finales:json_content];
                                         } else {
-                                            // Error hacer al recoger los items relacionados
-                                            NSLog(@"Error al recoger el card: %@", error);
-                                            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                                               message:[error localizedDescription]
-                                                                                              delegate:self
-                                                                                     cancelButtonTitle:@"OK"
-                                                                                     otherButtonTitles:nil];
-                                            [theAlert show];
+                                            [utils controlarErrores:error];
                                         }
                                     }];
                                 } else {
-                                    // Error hacer al recoger los items relacionados
-                                    NSLog(@"Error al recoger el card: %@", error);
-                                    UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                                       message:[error localizedDescription]
-                                                                                      delegate:self
-                                                                             cancelButtonTitle:@"OK"
-                                                                             otherButtonTitles:nil];
-                                    [theAlert show];
+                                    [utils controlarErrores:error];
                                 }
                             }];
                         } else {
-                            // Error hacer al recoger los items relacionados
-                            NSLog(@"Error al recoger el card: %@", error);
-                            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                               message:[error localizedDescription]
-                                                                              delegate:self
-                                                                     cancelButtonTitle:@"OK"
-                                                                     otherButtonTitles:nil];
-                            [theAlert show];
+                            [utils controlarErrores:error];
                         }
                     }];
                 } else {
-                    // Error hacer al recoger los items relacionados
-                    NSLog(@"Error al recoger el card: %@", error);
-                    UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                       message:[error localizedDescription]
-                                                                      delegate:self
-                                                             cancelButtonTitle:@"OK"
-                                                             otherButtonTitles:nil];
-                    [theAlert show];
+                    [utils controlarErrores:error];
                 }
             }];
             
         } else {
-            // Error hacer al recoger los items relacionados
-            NSLog(@"Error al recoger el card: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
     
@@ -464,7 +477,7 @@ NSNumber *id_c;
     {
         scrollViewHeight += view.frame.size.height;
     }
-    self.altura_scroll.constant = scrollViewHeight - 79 - 79 - 21 - 21 + 190;
+    self.altura_scroll.constant = scrollViewHeight - 79 - 79 - 21 + 190;
 }
 
 - (void)colocar_iconos_redes_sociales:(NSDictionary*)card_json{
@@ -580,13 +593,13 @@ NSNumber *id_c;
 
 #pragma mark - radial menu delegate methods
 - (NSInteger) numberOfItemsInRadialMenu:(ALRadialMenu *)radialMenu {
-    return 3;
+    return 2;
 }
 
 
 - (NSInteger) arcSizeForRadialMenu:(ALRadialMenu *)radialMenu {
     //Tamaño en grados de lo que ocupa el menu
-    return 65;
+    return 40;
 }
 
 
@@ -606,8 +619,6 @@ NSNumber *id_c;
 			return [UIImage imageNamed:@"1_ACTUALIDAD"];
 		} else if (index == 2) {
 			return [UIImage imageNamed:@"1_AGENDA"];
-		} else if (index == 3) {
-			return [UIImage imageNamed:@"1_SORTEOS"];
 		}
         
 	}
@@ -635,13 +646,6 @@ NSNumber *id_c;
             
             [self.navigationController pushViewController:agendaController animated:YES];
 			
-		} else if (index == 3) {
-            //Se hace click en el label de sorteos
-            
-            sorteosIndexViewController *sorteosController =
-            [storyboard instantiateViewControllerWithIdentifier:@"sorteosIndexViewController"];
-            
-            [self.navigationController pushViewController:sorteosController animated:YES];
 		}
 	}
 }
@@ -651,6 +655,206 @@ NSNumber *id_c;
 }
 
 - (IBAction)menuButton:(id)sender {
+}
+
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
+}
+
+- (IBAction)buscar:(id)sender {
+    _textViewBuscar.text = @"";
+    ultima_busqueda_ficha = @"";
+    if(_scroll_view.userInteractionEnabled){
+        _scroll_view.userInteractionEnabled = FALSE;
+    }
+    else{
+        _scroll_view.userInteractionEnabled = TRUE;
+    }
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 140;
+    newFrame.size.height = 54;
+    _viewBuscar.frame = newFrame;
+    if(_viewBuscar.hidden){
+        _viewBuscar.hidden = FALSE;
+    }
+    else{
+        _viewBuscar.hidden = TRUE;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            _viewBuscar.hidden = TRUE;
+        }
+    }
+    
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)theTextField {
+    if (theTextField == self.textViewBuscar) {
+        [theTextField resignFirstResponder];
+    }
+    return YES;
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event{
+    //hides keyboard when another part of layout was touched
+    [self.view endEditing:YES];
+    [super touchesBegan:touches withEvent:event];
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+    _scroll_view.userInteractionEnabled = TRUE;
+}
+
+- (IBAction)textFieldDidBeginEditing:(id)sender {
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 310;
+    _viewBuscar.frame = newFrame;
+}
+
+- (IBAction)textFieldDidEndEditing:(UITextField *)sender
+{
+    if(![ultima_busqueda_ficha isEqualToString:_textViewBuscar.text]){
+        [self buscar];
+        CGRect newFrame = _viewBuscar.frame;
+        newFrame.origin.y = DEVICE_SIZE.height - 270;
+        newFrame.size.height = 180;
+        _viewBuscar.frame = newFrame;
+    }
+}
+
+- (void) buscar
+{
+    sesion *s = [sesion sharedInstance];
+    if(![ultima_busqueda_ficha isEqualToString:_textViewBuscar.text]){
+        ultima_busqueda_ficha = _textViewBuscar.text;
+        [[articles_dao sharedInstance] search:s.codigo_conexion q:_textViewBuscar.text limit:@5 page:@0 y:^(NSArray *articles, NSError *error) {
+            if (!error) {
+                UIScrollView* scrollViewSearch = [[UIScrollView alloc] initWithFrame:CGRectMake(0, DEVICE_SIZE.height - 54 - 166, 320, 130)];
+                scrollViewSearch.tag = 50;
+                [scrollViewSearch setBackgroundColor: [UIColor colorWithRed:37.0/255.0f green:37.0/255.0f blue:37.0/255.0f alpha:1]];
+                int i = 0;
+                NSValue *irArtistas = [NSValue valueWithPointer:@selector(verArtista:)];
+                NSValue *irSitio = [NSValue valueWithPointer:@selector(verSitio:)];
+                NSValue *irSello = [NSValue valueWithPointer:@selector(verSello:)];
+                for (NSDictionary *JSONnoteData in articles) {
+                    [constructorVistas dibujarResultadoEnPosicion:JSONnoteData en:scrollViewSearch posicion:i selectorArtista:irArtistas selectorSitio:irSitio selectorSello:irSello controllerBase:self];
+                    i++;
+                    numero_resultados_ficha++;
+                }
+                
+                [self autoWidthScrollView:scrollViewSearch];
+                [self.view addSubview:scrollViewSearch];
+                numero_resultados_ficha = 0;
+                
+            } else {
+            }
+        }];
+    }
+}
+
+- (void) autoWidthScrollView:(UIScrollView*)scrollViewBusqueda{
+    CGFloat scrollViewWidth = 0.0f;
+    for (UIView* view in scrollViewBusqueda.subviews)
+    {
+        scrollViewWidth += view.frame.size.width+10;
+    }
+    [scrollViewBusqueda setContentSize:(CGSizeMake(scrollViewWidth, 130))];
+}
+
+#pragma mark - ASMediaFocusDelegate
+// Returns an image view that represents the media view. This image from this view is used in the focusing animation view. It is usually a small image.
+- (UIImageView *)mediaFocusManager:(ASMediaFocusManager *)mediaFocusManager imageViewForView:(UIView *)view;
+{
+    return (UIImageView *)view;
+}
+
+// Returns the final focused frame for this media view. This frame is usually a full screen frame.
+- (CGRect)mediaFocusManager:(ASMediaFocusManager *)mediaFocusManager finalFrameForView:(UIView *)view
+{
+    return self.parentViewController.view.bounds;
+}
+
+// Returns the view controller in which the focus controller is going to be added.
+// This can be any view controller, full screen or not.
+- (UIViewController *)parentViewControllerForMediaFocusManager:(ASMediaFocusManager *)mediaFocusManager
+{
+    return self.parentViewController;
+}
+
+// Returns an URL where the image is stored. This URL is used to create an image at full screen. The URL may be local (file://) or distant (http://).
+- (NSURL *)mediaFocusManager:(ASMediaFocusManager *)mediaFocusManager mediaURLForView:(UIView *)view
+{
+    NSURL *url;
+    url = [NSURL fileURLWithPath:view.restorationIdentifier];
+    return url;
+}
+
+// Returns the title for this media view. Return nil if you don't want any title to appear.
+- (NSString *)mediaFocusManager:(ASMediaFocusManager *)mediaFocusManager titleForView:(UIView *)view
+{
+    return @"";
+}
+
+- (void) image:(NSDictionary *)image unElemento:(bool)unElemento en:(UIScrollView*)scrollView{
+    UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
+    imageView.restorationIdentifier =[image objectForKey:@"image"];
+    [imageView setTag:5];
+    [utils downloadImageWithURL:[NSURL URLWithString:[image objectForKey:@"image"]] completionBlock:^(BOOL succeeded, UIImage *image) {
+        if (succeeded) {
+            int anchura_embed = 240;
+            int altura_embed = 160;
+            CGFloat p = 0.0f;
+            if(unElemento){
+                anchura_embed = 270;
+                altura_embed = 184;
+                p = 30;
+            }
+            UIImage* new_image = [constructorVistas imageWithImage:image
+                                                  scaledToMaxWidth:anchura_embed
+                                                         maxHeight:altura_embed];
+            for(UIView* v in scrollView.subviews){
+                if(v.frame.size.width>10){
+                    p = p + v.frame.size.width+5 ;
+                }
+            }
+            if(p==0){
+                p=2;
+            }
+            imageView.frame = CGRectMake(p, 0, new_image.size.width, new_image.size.height);
+            [imageView setImage:image];
+            imageView.userInteractionEnabled = YES;
+            [scrollView addSubview:imageView];
+            CGFloat scrollViewWidth = 0.0f;
+            for (UIWebView* view in scrollView.subviews)
+            {
+                scrollViewWidth += view.frame.size.width;
+            }
+            [scrollView setContentSize:(CGSizeMake(scrollViewWidth, 150))];
+            [self.imageViews addObject:imageView];
+            [self.mediaFocusManager installOnViews:self.imageViews];
+        }
+    }];
+}
+
+- (UIScrollView*)construir_scroll_images:(NSDictionary*) json posicion:(int) posicion{
+    UIScrollView* scrollLateral = [[UIScrollView alloc] initWithFrame:CGRectMake(0, posicion, 320, 170)];
+    scrollLateral.tag= 15;
+    [scrollLateral setBackgroundColor:[UIColor colorWithRed: 233/255.0f green:233/255.0f blue:233/255.0f alpha:1.0]];
+    
+    for(NSDictionary* image in [json objectForKey:@"images"]){
+        [self image:image unElemento:[[json objectForKey:@"images"] count]==1 en:scrollLateral];
+    }
+    return scrollLateral;
 }
 
 

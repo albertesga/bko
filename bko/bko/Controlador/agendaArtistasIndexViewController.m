@@ -16,6 +16,7 @@
 #import "actualidadIndexViewController.h"
 #import "agendaIndexViewController.h"
 #import "sorteosIndexViewController.h"
+#import "sinConexionViewController.h"
 
 @interface agendaArtistasIndexViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *agenda_label;
@@ -28,6 +29,7 @@
 @property (weak, nonatomic) IBOutlet UIButton *button_coordenadas;
 @property (weak, nonatomic) IBOutlet UIImageView *degradado_menu;
 @property (weak, nonatomic) IBOutlet UIButton *menu_button;
+@property (weak, nonatomic) IBOutlet NSLayoutConstraint *altura_scroll;
 
 @end
 
@@ -51,7 +53,8 @@ NSString *date_artistas =@"";
 - (void)viewDidLoad
 {
     [super viewDidLoad];
-    
+    [self conectado];
+
     //Menu Radial
     self.radialMenu = [[ALRadialMenu alloc] init];
 	self.radialMenu.delegate = self;
@@ -63,11 +66,13 @@ NSString *date_artistas =@"";
     
     [self.menu_lateral_button setTarget: self.revealViewController];
     [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
-    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
-    self.revealViewController.rightViewRevealWidth = 118;
+    [self.revealViewController panGestureRecognizer];
+    [self.revealViewController tapGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 180;
+    self.revealViewController.delegate = self;
     
     NSDate *today = [NSDate date];
-    _fecha_label.text = [utils fechaConFormatoTituloAgenda:today];
+    
     _fecha_label.font = FONT_BEBAS(13.0f);
     NSCalendar* calendar = [[NSCalendar alloc] initWithCalendarIdentifier: NSGregorianCalendar];
     NSDateComponents* components = [[NSDateComponents alloc] init];
@@ -83,8 +88,12 @@ NSString *date_artistas =@"";
     NSNumber *hasta = [NSNumber numberWithInteger:[desde_artistas intValue]+10];
     [_activity_indicator startAnimating];
     _activity_indicator.hidden = FALSE;
-    [[party_dao sharedInstance] getPartiesArtists:s.codigo_conexion date:[NSDate date] limit:hasta page:desde_artistas y:^(NSArray *places, NSError *error) {
+    components.day = _dia;
+    NSDate* fecha_inicio = [calendar dateByAddingComponents: components toDate: [NSDate date] options: 0];
+    _fecha_label.text = [utils fechaConFormatoTituloAgenda:fecha_inicio];
+    [[party_dao sharedInstance] getPartiesArtists:s.codigo_conexion date:fecha_inicio limit:hasta page:desde_artistas y:^(NSArray *places, NSError *error) {
         if (!error) {
+        
             desde_artistas = [NSNumber numberWithInt:([desde_artistas integerValue] + [places count])];
             for (NSDictionary *JSONnoteData in places) {
                 [self mostrar_artista:JSONnoteData];
@@ -94,27 +103,68 @@ NSString *date_artistas =@"";
             }
         } else {
             // Error processing
-            NSLog(@"Error al recoger parties places: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
         [_activity_indicator stopAnimating];
         _activity_indicator.hidden = TRUE;
     }];
     
-    [self autoHeight];
-    
-    if(s.latitude!=nil && s.latitude!=0){
+    if([s.latitude intValue] == 0){
         [self shakeView];
     }
     else{
         _button_coordenadas.hidden = TRUE;
     }
 
+}
+- (IBAction)irEventos:(id)sender {
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    agendaIndexViewController *agendaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"agendaIndexViewController"];
+    agendaController.dia = _dia;
+    [self.navigationController pushViewController:agendaController animated:NO];
+}
+
+-(void)viewDidAppear:(BOOL)animated{
+    NSInteger numberOfViewControllers = self.navigationController.viewControllers.count;
+    [self.navigationController viewControllers];
+    if ([[self.navigationController.viewControllers objectAtIndex:numberOfViewControllers - 2] isKindOfClass:[agendaIndexViewController class]]){
+        NSMutableArray *allControllers = [[NSMutableArray alloc] initWithArray:self.navigationController.viewControllers];
+        [allControllers removeObjectAtIndex:[allControllers count] - 2];
+        [self.navigationController setViewControllers:allControllers animated:NO];
+    }
+}
+
+- (void)viewWillDisappear:(BOOL)animated{
+    numero_artistas = 0;
+    if(!_degradado_menu.hidden){
+        [self.radialMenu buttonsWillAnimateFromButton:_menu_button withFrame:self.menu_button.frame inView:self.view];
+        [UIView transitionWithView:_degradado_menu
+                          duration:0.8
+                           options:
+         UIViewAnimationOptionTransitionCrossDissolve
+                        animations:NULL
+                        completion:NULL];
+        _degradado_menu.hidden = true;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController willMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController didMoveToPosition:(FrontViewPosition)position
+{    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
 }
 
 - (void) mostrar_no_se_han_encontrado_artistas{
@@ -160,13 +210,7 @@ NSString *date_artistas =@"";
          }
      } else {
      // Error processing
-         NSLog(@"Error al recoger parties places: %@", error);
-         UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                            message:[error localizedDescription]
-                                                           delegate:self
-                                                  cancelButtonTitle:@"OK"
-                                                  otherButtonTitles:nil];
-         [theAlert show];
+         [utils controlarErrores:error];
      }
          [_activity_indicator stopAnimating];
          _activity_indicator.hidden = TRUE;
@@ -174,7 +218,7 @@ NSString *date_artistas =@"";
     for(int dia=0;dia<10;dia++){
         [self mostrar_artista:nil];
     }
-    [self autoHeight];
+    [self autoHeight:false];
 }
 
 - (void) mostrar_artista:(NSDictionary*) json{
@@ -182,13 +226,13 @@ NSString *date_artistas =@"";
     int columna = numero_artistas%3;
     int y = 110*fila + 5;
     int x = 5;
-    x = x + 110*columna;
+    x = x + 105*columna;
 
     numero_artistas++;
     //Las UIViews de cada
     UIView *paintView=[[UIView alloc]initWithFrame:CGRectMake(x, y, 106, 106)];
     [paintView setBackgroundColor:[UIColor clearColor]];
-    [_scrollView addSubview:paintView];
+    [_view_scroll addSubview:paintView];
 
     UIButton *buttonArtista = [[UIButton alloc] initWithFrame:CGRectMake(3, 3, 100, 100)];
     NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[json objectForKey:@"list_img"]]];
@@ -202,7 +246,7 @@ NSString *date_artistas =@"";
 
     [buttonArtista addTarget:self action:@selector(detallesAgenda:) forControlEvents:UIControlEventTouchUpInside];
     
-    UIImageView *imagen_fondo_box = [[UIImageView alloc] initWithFrame:CGRectMake(2, 82, 100, 20)];
+    UIImageView *imagen_fondo_box = [[UIImageView alloc] initWithFrame:CGRectMake(3, 82, 100, 20)];
     [imagen_fondo_box setImage:[UIImage imageNamed:@"FONDO_IMAGEN.png"]];
     [paintView addSubview:imagen_fondo_box];
     
@@ -238,16 +282,21 @@ NSString *date_artistas =@"";
     UILabel *numeroDia = [[UILabel alloc] initWithFrame:CGRectMake(0, 4, 40, 46)];
     [diaView addSubview:numeroDia];
     numeroDia.text=[NSString stringWithFormat: @"%d", (int)[components day]];
-    numeroDia.textColor=[UIColor whiteColor];
+    if(posicion==_dia){
+        numeroDia.textColor=[UIColor colorWithRed:0.0/255.0f green:255.0/255.0f blue:222.0/255.0f alpha:1];
+    }
+    else{
+        numeroDia.textColor=[UIColor whiteColor];
+    }
     numeroDia.font = FONT_BEBAS(45.0f);
     numeroDia.textAlignment = NSTextAlignmentCenter;
-    
+    numeroDia.tag=1;
     UIButton *buttonDia = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 100, 48)];
     [diaView addSubview:buttonDia];
     
     //Como no le podemos pasar ningún parámetro a la función pero si un entero, le pasamos la diferencia de días desde hoy hasta el día escogido
     buttonDia.tag = posicion;
-    [buttonDia addTarget:self action:@selector(agendaSegunDia:) forControlEvents:UIControlEventTouchUpInside];
+    [buttonDia addTarget:self action:@selector(agendaArtistaSegunDia:) forControlEvents:UIControlEventTouchUpInside];
     
     UILabel *mes = [[UILabel alloc] initWithFrame:CGRectMake(39, 8, 40, 21)];
     [diaView addSubview:mes];
@@ -260,7 +309,13 @@ NSString *date_artistas =@"";
     UILabel *diaSemana = [[UILabel alloc] initWithFrame:CGRectMake(40, 25, 55, 21)];
     [diaView addSubview:diaSemana];
     diaSemana.text=[dfWeekDay stringFromDate:day];
-    diaSemana.textColor=[UIColor whiteColor];
+    if(posicion==_dia){
+        diaSemana.textColor=[UIColor colorWithRed:0.0/255.0f green:255.0/255.0f blue:222.0/255.0f alpha:1];
+    }
+    else{
+        diaSemana.textColor=[UIColor whiteColor];
+    }
+    diaSemana.tag=1;
     diaSemana.font = FONT_BEBAS(16.0f);
     
     UIImageView *separador = [[UIImageView alloc] initWithFrame:CGRectMake(98, 7, 2, 35)];
@@ -269,23 +324,38 @@ NSString *date_artistas =@"";
     [diaView addSubview:separador];
 }
 
--(void)agendaSegunDia:(UIButton*)sender
+-(void)agendaArtistaSegunDia:(UIButton*)sender
 {
+    for (UIView *v in _scrollViewCalendar.subviews){
+        for (UIView *v2 in v.subviews){
+            if(v2.tag==1 && [v2 isKindOfClass:[UILabel class]]){
+                UILabel *v3 = (UILabel*)v2;
+                v3.textColor=[UIColor whiteColor];
+            }
+        }
+    }
+    for (UIView* v in sender.superview.subviews){
+        if(v.tag==1 && [v isKindOfClass:[UILabel class]]){
+            UILabel *v2 = (UILabel*)v;
+            v2.textColor=[UIColor colorWithRed:0.0/255.0f green:255.0/255.0f blue:222.0/255.0f alpha:1];
+        }
+    }
     NSCalendar* calendar = [[NSCalendar alloc] initWithCalendarIdentifier: NSGregorianCalendar];
     NSDateComponents* components = [[NSDateComponents alloc] init];
     components.day = sender.tag;
+    _dia = sender.tag;
     NSDate* newDate = [calendar dateByAddingComponents: components toDate: [NSDate date] options: 0];
     NSDateFormatter* dfDate = [[NSDateFormatter alloc] init];
     [dfDate setDateFormat:@"dd-mm-yyyy"];
     [self inicializarVista];
     date_artistas = [dfDate stringFromDate:newDate];
+    _fecha_label.text = [utils fechaConFormatoTituloAgenda:newDate];
     desde_artistas = [NSNumber numberWithInt:([desde_artistas integerValue] + 10)];
     sesion *s = [sesion sharedInstance];
     //NSNumber *hasta = [NSNumber numberWithInteger:[desde_artistas intValue]+10];
     [_activity_indicator startAnimating];
     _activity_indicator.hidden = FALSE;
      [[party_dao sharedInstance] getPartiesArtists:s.codigo_conexion date:newDate limit:nil page:desde_artistas y:^(NSArray *artistas, NSError *error) {
-         NSLog(@"HOLA %@",artistas);
      if (!error) {
          for (NSDictionary *JSONnoteData in artistas) {
                 [self mostrar_artista:JSONnoteData];
@@ -295,13 +365,7 @@ NSString *date_artistas =@"";
          }
      } else {
      // Error processing
-         NSLog(@"Error al recoger parties places: %@", error);
-         UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                            message:[error localizedDescription]
-                                                           delegate:self
-                                                  cancelButtonTitle:@"OK"
-                                                  otherButtonTitles:nil];
-         [theAlert show];
+         [utils controlarErrores:error];
      }
          [_activity_indicator stopAnimating];
          _activity_indicator.hidden = TRUE;
@@ -333,13 +397,18 @@ NSString *date_artistas =@"";
     [locationManager startUpdatingLocation];
 }
 
-- (void) autoHeight{
+- (void) autoHeight:(BOOL)primera{
     CGFloat scrollViewHeight = 0.0f;
-    for (UIView* view in _scrollView.subviews)
+    for (UIView* view in _view_scroll.subviews)
     {
         scrollViewHeight += view.frame.size.height;
     }
-    [_scrollView setContentSize:(CGSizeMake(320, scrollViewHeight/3))];
+    if(primera){
+        self.altura_scroll.constant = scrollViewHeight/3+54;
+    }
+    else{
+        self.altura_scroll.constant = scrollViewHeight/3;
+    }
 }
 
 - (void) autoWidthCalendar{
@@ -391,23 +460,24 @@ NSString *date_artistas =@"";
         for (id o in self.radialMenu.items){
             [self.view bringSubviewToFront:o];
         }
-        
+        _scrollViewCalendar.userInteractionEnabled = NO;
         _degradado_menu.hidden = false;
     }
     else{
+        _scrollViewCalendar.userInteractionEnabled = YES;
         _degradado_menu.hidden = true;
     }
 }
 
 #pragma mark - radial menu delegate methods
 - (NSInteger) numberOfItemsInRadialMenu:(ALRadialMenu *)radialMenu {
-    return 3;
+    return 2;
 }
 
 
 - (NSInteger) arcSizeForRadialMenu:(ALRadialMenu *)radialMenu {
     //Tamaño en grados de lo que ocupa el menu
-    return 65;
+    return 40;
 }
 
 
@@ -427,8 +497,6 @@ NSString *date_artistas =@"";
 			return [UIImage imageNamed:@"1_ACTUALIDAD"];
 		} else if (index == 2) {
 			return [UIImage imageNamed:@"1_AGENDA"];
-		} else if (index == 3) {
-			return [UIImage imageNamed:@"1_SORTEOS"];
 		}
         
 	}
@@ -451,13 +519,6 @@ NSString *date_artistas =@"";
 		} else if (index == 2) {
             //Se hace click en el label de agenda
 			
-		} else if (index == 3) {
-            //Se hace click en el label de sorteos
-            
-            sorteosIndexViewController *sorteosController =
-            [storyboard instantiateViewControllerWithIdentifier:@"sorteosIndexViewController"];
-            
-            [self.navigationController pushViewController:sorteosController animated:YES];
 		}
 	}
 }
@@ -469,6 +530,14 @@ NSString *date_artistas =@"";
 - (IBAction)menuButton:(id)sender {
 }
 
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
+}
 
 /*
 #pragma mark - Navigation

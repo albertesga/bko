@@ -14,6 +14,10 @@
 #import "actualidadIndexViewController.h"
 #import "agendaIndexViewController.h"
 #import "sorteosIndexViewController.h"
+#import "sinConexionViewController.h"
+#import "articles_dao.h"
+#import "constructorVistas.h"
+#import "fichaViewController.h"
 
 @interface mensajesIndexViewController ()
 
@@ -30,6 +34,8 @@
 @property (weak, nonatomic) IBOutlet UIButton *buzon_button;
 @property (weak, nonatomic) IBOutlet UIImageView *degradado_menu;
 @property (weak, nonatomic) IBOutlet UIButton *menu_button;
+@property (weak, nonatomic) IBOutlet UITextField *textViewBuscar;
+@property (weak, nonatomic) IBOutlet UIView *viewBuscar;
 @end
 
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
@@ -37,6 +43,10 @@
 @implementation mensajesIndexViewController
 
 int numero_mensajes = 0;
+int numero_resultados_mensajes = 0;
+UILabel *placeholderLabel;
+NSString* ultima_busqueda_mensajes = @"";
+#define DEVICE_SIZE [[[[UIApplication sharedApplication] keyWindow] rootViewController].view convertRect:[[UIScreen mainScreen] bounds] fromView:nil].size
 #define limit_paginate ((int) 8)
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
@@ -52,6 +62,9 @@ int numero_mensajes = 0;
     if (theTextField == self.mensaje_por_escribir) {
         [theTextField resignFirstResponder];
     }
+    if (theTextField == self.textViewBuscar) {
+        [theTextField resignFirstResponder];
+    }
     return YES;
 }
 
@@ -64,22 +77,103 @@ int numero_mensajes = 0;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self conectado];
+    
+    [_viewBuscar setTranslatesAutoresizingMaskIntoConstraints:YES];
+    self.textViewBuscar.delegate=self;
+    
     numero_mensajes = 0;
     [self.menu_lateral_button setTarget: self.revealViewController];
     [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
-    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
-    self.revealViewController.rightViewRevealWidth = 118;
+    [self.revealViewController panGestureRecognizer];
+    [self.revealViewController tapGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 180;
+    self.revealViewController.delegate = self;
+    
     [self showMensajes];
     
     //Menu Radial
     self.radialMenu = [[ALRadialMenu alloc] init];
 	self.radialMenu.delegate = self;
     
+    
+    placeholderLabel = [[UILabel alloc] initWithFrame:CGRectMake(10.0, 0.0, _mensaje_por_escribir.frame.size.width - 20.0, 34.0)];
+    [placeholderLabel setText:@"Escribe aquí tu mensaje"];
+    // placeholderLabel is instance variable retained by view controller
+    [placeholderLabel setBackgroundColor:[UIColor clearColor]];
+    [placeholderLabel setTextColor:[UIColor lightGrayColor]];
+    
+    // textView is UITextView object you want add placeholder text to
+    [_mensaje_por_escribir addSubview:placeholderLabel];
+    _mensaje_por_escribir.delegate = self;
+}
+
+- (void) textViewDidChange:(UITextView *)theTextView
+{
+    if(![_mensaje_por_escribir hasText]) {
+        [_mensaje_por_escribir addSubview:placeholderLabel];
+    } else if ([[_mensaje_por_escribir subviews] containsObject:placeholderLabel]) {
+        [placeholderLabel removeFromSuperview];
+    }
+}
+
+- (void)textViewDidEndEditing:(UITextView *)theTextView
+{
+    if (![_mensaje_por_escribir hasText]) {
+        [_mensaje_por_escribir addSubview:placeholderLabel];
+    }
+}
+
+
+-(void)viewDidAppear:(BOOL)animated{
+    NSInteger numberOfViewControllers = self.navigationController.viewControllers.count;
+    if ([[self.navigationController.viewControllers objectAtIndex:numberOfViewControllers - 2] isKindOfClass:[self class]]){
+        NSMutableArray *allControllers = [[NSMutableArray alloc] initWithArray:self.navigationController.viewControllers];
+        [allControllers removeObjectAtIndex:[allControllers count] - 2];
+        [self.navigationController setViewControllers:allControllers animated:NO];
+    }
+}
+
+- (void)viewWillDisappear:(BOOL)animated{
+    if(!_degradado_menu.hidden){
+        [self.radialMenu buttonsWillAnimateFromButton:_menu_button withFrame:self.menu_button.frame inView:self.view];
+        [UIView transitionWithView:_degradado_menu
+                          duration:0.8
+                           options:
+         UIViewAnimationOptionTransitionCrossDissolve
+                        animations:NULL
+                        completion:NULL];
+        _degradado_menu.hidden = true;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+        }
+    }
+    _viewBuscar.hidden = TRUE;
 }
 
 - (void)viewWillAppear:(BOOL)animated
 {
     numero_mensajes = 0;
+}
+
+- (void)revealController:(SWRevealViewController *)revealController willMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController didMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
 }
 
 -(void)showMensajes{
@@ -98,14 +192,7 @@ int numero_mensajes = 0;
             _activity_indicator.hidden = TRUE;
             [self autoHeight];
         } else {
-            // Error processing
-            NSLog(@"Error al recoger parties places: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -179,8 +266,6 @@ int numero_mensajes = 0;
     [[message_dao sharedInstance] getMessage:s.codigo_conexion item_id:id_a y:^(NSArray *mensajes, NSError *error) {
         if (!error) {
             [[message_dao sharedInstance] getUnreadMessagesCount:s.codigo_conexion y:^(NSArray *countMessages, NSError *error) {
-                NSLog(@"DENTRO DE UNREAD MESSAGES %@",s.messages_unread);
-                NSLog(@"DENTRO DE UNREAD MESSAGES %@",countMessages);
                 if (!error) {
                     NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
                     [f setNumberStyle:NSNumberFormatterDecimalStyle];
@@ -188,7 +273,6 @@ int numero_mensajes = 0;
                     NSDictionary* c = [countMessages objectAtIndex:0];
                     s.messages_unread = [c objectForKey:@"count"];
                 }
-                NSLog(@"DENTRO DE UNREAD MESSAGES %@",s.messages_unread);
             }];
             for (NSDictionary *JSONnoteData in [[[mensajes objectAtIndex:0] objectForKey:@"message_thread"] objectForKey:@"messages"]) {
                 CGFloat scrollViewHeight = 0.0f;
@@ -255,14 +339,7 @@ int numero_mensajes = 0;
                 
             }
         } else {
-            // Error processing
-            NSLog(@"Error al recoger mensaje: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
     
@@ -270,6 +347,7 @@ int numero_mensajes = 0;
 
 - (IBAction)contestar:(id)sender {
     _modal_escribir.hidden = false;
+    [_mensaje_por_escribir becomeFirstResponder];
 }
 
 - (IBAction)enviar_contestacion:(id)sender {
@@ -283,14 +361,7 @@ int numero_mensajes = 0;
          [storyboard instantiateViewControllerWithIdentifier:@"mensajesIndexViewController"];
          [self.navigationController pushViewController:mensajes animated:true];
      } else {
-     // Error processing
-         NSLog(@"Error al contestar mensaje: %@", error);
-         UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                            message:[error localizedDescription]
-                                                           delegate:self
-                                                  cancelButtonTitle:@"OK"
-                                                  otherButtonTitles:nil];
-         [theAlert show];
+           [utils controlarErrores:error];
      }
      }];
 }
@@ -351,13 +422,13 @@ int numero_mensajes = 0;
 
 #pragma mark - radial menu delegate methods
 - (NSInteger) numberOfItemsInRadialMenu:(ALRadialMenu *)radialMenu {
-    return 3;
+    return 2;
 }
 
 
 - (NSInteger) arcSizeForRadialMenu:(ALRadialMenu *)radialMenu {
     //Tamaño en grados de lo que ocupa el menu
-    return 65;
+    return 40;
 }
 
 
@@ -377,8 +448,6 @@ int numero_mensajes = 0;
 			return [UIImage imageNamed:@"1_ACTUALIDAD"];
 		} else if (index == 2) {
 			return [UIImage imageNamed:@"1_AGENDA"];
-		} else if (index == 3) {
-			return [UIImage imageNamed:@"1_SORTEOS"];
 		}
         
 	}
@@ -406,13 +475,6 @@ int numero_mensajes = 0;
             
             [self.navigationController pushViewController:agendaController animated:YES];
 			
-		} else if (index == 3) {
-            //Se hace click en el label de sorteos
-            
-            sorteosIndexViewController *sorteosController =
-            [storyboard instantiateViewControllerWithIdentifier:@"sorteosIndexViewController"];
-            
-            [self.navigationController pushViewController:sorteosController animated:YES];
 		}
 	}
 }
@@ -424,7 +486,155 @@ int numero_mensajes = 0;
 - (IBAction)menuButton:(id)sender {
 }
 
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
+}
 
+- (IBAction)buscar:(id)sender {
+    _textViewBuscar.text = @"";
+    ultima_busqueda_mensajes = @"";
+    if(_scrollView.userInteractionEnabled){
+        _scrollView.userInteractionEnabled = FALSE;
+    }
+    else{
+        _scrollView.userInteractionEnabled = TRUE;
+    }
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 140;
+    newFrame.size.height = 54;
+    _viewBuscar.frame = newFrame;
+    if(_viewBuscar.hidden){
+        _viewBuscar.hidden = FALSE;
+    }
+    else{
+        _viewBuscar.hidden = TRUE;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            _viewBuscar.hidden = TRUE;
+        }
+    }
+    
+}
+
+
+/*- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event{
+    //hides keyboard when another part of layout was touched
+    [self.view endEditing:YES];
+    [super touchesBegan:touches withEvent:event];
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==1){
+            [v removeFromSuperview];
+ 
+        }
+    }
+ _viewBuscar.hidden = TRUE;
+    _scrollView.userInteractionEnabled = TRUE;
+}*/
+
+- (IBAction)textFieldDidBeginEditing:(id)sender {
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 310;
+    _viewBuscar.frame = newFrame;
+}
+
+- (IBAction)textFieldDidEndEditing:(UITextField *)sender
+{
+    if(![ultima_busqueda_mensajes isEqualToString:_textViewBuscar.text]){
+        [self buscar];
+        CGRect newFrame = _viewBuscar.frame;
+        newFrame.origin.y = DEVICE_SIZE.height - 270;
+        newFrame.size.height = 180;
+        _viewBuscar.frame = newFrame;
+    }
+}
+
+- (void) buscar
+{
+    sesion *s = [sesion sharedInstance];
+    if(![ultima_busqueda_mensajes isEqualToString:_textViewBuscar.text]){
+        ultima_busqueda_mensajes = _textViewBuscar.text;
+        [[articles_dao sharedInstance] search:s.codigo_conexion q:_textViewBuscar.text limit:@5 page:@0 y:^(NSArray *articles, NSError *error) {
+            if (!error) {
+                UIScrollView* scrollViewSearch = [[UIScrollView alloc] initWithFrame:CGRectMake(0, DEVICE_SIZE.height - 54 - 166, 320, 130)];
+                scrollViewSearch.tag = 50;
+                [scrollViewSearch setBackgroundColor: [UIColor colorWithRed:37.0/255.0f green:37.0/255.0f blue:37.0/255.0f alpha:1]];
+                int i = 0;
+                NSValue *irArtistas = [NSValue valueWithPointer:@selector(verArtista:)];
+                NSValue *irSitio = [NSValue valueWithPointer:@selector(verSitio:)];
+                NSValue *irSello = [NSValue valueWithPointer:@selector(verSello:)];
+                for (NSDictionary *JSONnoteData in articles) {
+                    [constructorVistas dibujarResultadoEnPosicion:JSONnoteData en:scrollViewSearch posicion:i selectorArtista:irArtistas selectorSitio:irSitio selectorSello:irSello controllerBase:self];
+                    i++;
+                    numero_resultados_mensajes++;
+                }
+                
+                [self autoWidthScrollView:scrollViewSearch];
+                [self.view addSubview:scrollViewSearch];
+                numero_resultados_mensajes = 0;
+                
+            } else {
+            }
+        }];
+    }
+}
+
+- (void) autoWidthScrollView:(UIScrollView*)scrollViewBusqueda{
+    CGFloat scrollViewWidth = 0.0f;
+    for (UIView* view in scrollViewBusqueda.subviews)
+    {
+        scrollViewWidth += view.frame.size.width+10;
+    }
+    [scrollViewBusqueda setContentSize:(CGSizeMake(scrollViewWidth, 130))];
+}
+
+-(void)verSitio:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sitio"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verSello:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sello"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verArtista:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Artist"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
 
 /*
  #pragma mark - Navigation

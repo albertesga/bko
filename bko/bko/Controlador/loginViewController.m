@@ -10,11 +10,13 @@
 #import "backgroundAnimate.h"
 #import "register_dao.h"
 #import <CommonCrypto/CommonDigest.h>
-#import "revealViewController.h"
+#import "SWRevealViewController.h"
 #import "registerNoFbPaso2ViewController.h"
 #import "sesion.h"
 #import "utils.h"
+#import "sinConexionViewController.h"
 #import "message_dao.h"
+#import "problemasLoginViewController.h"
 
 @interface loginViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *si_ya_tienes_label;
@@ -28,6 +30,7 @@
 
 @implementation loginViewController
 
+int contador = 0;
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
@@ -41,8 +44,9 @@
 
 - (void)viewDidLoad
 {
-    
+    contador = 0;
     [super viewDidLoad];
+    [self conectado];
     self.email.delegate = self;
     self.password.delegate = self;
     self.password.secureTextEntry = YES;
@@ -51,11 +55,13 @@
     paddingView.backgroundColor = [UIColor clearColor];
     UIView *paddingView2 = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
     paddingView2.backgroundColor = [UIColor clearColor];
-    
+    UIColor *color = [UIColor blackColor];
     self.password.leftView = paddingView;
     self.password.leftViewMode = UITextFieldViewModeAlways;
+    self.password.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Contraseña" attributes:@{NSForegroundColorAttributeName: color}];
     self.email.leftView = paddingView2;
     self.email.leftViewMode = UITextFieldViewModeAlways;
+    self.email.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Dirección e-mail" attributes:@{NSForegroundColorAttributeName: color}];
     
     _si_ya_tienes_label.font = FONT_BEBAS(18.0f);
     _por_favor_label.font = FONT_BEBAS(18.0f);
@@ -107,10 +113,16 @@
 }
 
 - (IBAction)login:(id)sender {
+    contador++;
+    if(contador>2){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        problemasLoginViewController *problemas =
+        [storyboard instantiateViewControllerWithIdentifier:@"problemasLoginViewController"];
+        [self presentViewController:problemas animated:NO completion:nil];
+    }
     NSString* password_md5 = [self md5:_password.text];
-    [[register_dao sharedInstance] login:_email.text password:password_md5 token:nil y:^(NSArray *connection, NSError *error) {
+    [[register_dao sharedInstance] login:_email.text password:password_md5 token:[utils retrieveToken] y:^(NSArray *connection, NSError *error) {
         if (!error) {
-            
                 
                 sesion *s = [sesion sharedInstance];
                 NSDictionary* con = [connection objectAtIndex:0];
@@ -143,19 +155,13 @@
                 }
                 else{
                     UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
-                    revealViewController *actualidad =
-                    [storyboard instantiateViewControllerWithIdentifier:@"revealViewController"];
+                    SWRevealViewController *actualidad =
+                    [storyboard instantiateViewControllerWithIdentifier:@"SWRevealViewController"];
                     [self presentViewController:actualidad animated:NO completion:nil];
             }
         } else {
             // Error processing
-            NSLog(@"Error en la llamada del login: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 
@@ -178,7 +184,7 @@
 }
 
 - (void)viewDidAppear:(BOOL)animated {
-    
+    contador = 0;
     //Llamamos al Singleton backgroundAnimate y ejecutamos la funcion que anima el background
     backgroundAnimate *background = [backgroundAnimate sharedInstance];
     [background animateBackground:self.backgroundImageView];
@@ -200,6 +206,15 @@
     backgroundAnimate *background = [backgroundAnimate sharedInstance];
     [background animateBackground:self.backgroundImageView];
     [background applyCloudLayerAnimation];
+}
+
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
 }
 
 

@@ -13,6 +13,8 @@
 #import "backgroundAnimate.h"
 #import "sesion.h"
 #import "register_dao.h"
+#import "utils.h"
+#import "sinConexionViewController.h"
 
 @interface registerNoFbPaso2ViewController ()
 @property (weak, nonatomic) IBOutlet UIImageView *text_image;
@@ -40,6 +42,7 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self conectado];
     // Do any additional setup after loading the view.
     locationManager = [[CLLocationManager alloc] init];
     locationManager.delegate = self;
@@ -137,6 +140,15 @@
     backgroundAnimate *background = [backgroundAnimate sharedInstance];
     [background animateBackground:self.backgroundImageView];
     [background applyCloudLayerAnimation];
+}
+
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
 }
 
 /*

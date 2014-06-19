@@ -20,6 +20,7 @@
 #import "actualidadIndexViewController.h"
 #import "agendaIndexViewController.h"
 #import "sorteosIndexViewController.h"
+#import "sinConexionViewController.h"
 
 @interface agendaDetalleViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *titulo_foto_label;
@@ -48,6 +49,7 @@
 @property (weak, nonatomic) IBOutlet UILabel *raffle_sortea_label;
 @property (weak, nonatomic) IBOutlet UILabel *raffle_title_label;
 @property (weak, nonatomic) IBOutlet UIView *entrado_sorteo_modal;
+@property (weak, nonatomic) IBOutlet UIView *vista_agenda_info;
 
 @end
 
@@ -69,6 +71,8 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self conectado];
+    
     locationManager = [[CLLocationManager alloc] init];
     locationManager.delegate = self;
     locationManager.distanceFilter = kCLDistanceFilterNone;
@@ -80,39 +84,61 @@
     
     [self.menu_lateral_button setTarget: self.revealViewController];
     [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
-    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
-    self.revealViewController.rightViewRevealWidth = 118;
+    [self.revealViewController panGestureRecognizer];
+    [self.revealViewController tapGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 180;
+    self.revealViewController.delegate = self;
+    
+    self.imageViews = [[NSMutableArray alloc] init];
+    self.mediaFocusManager = [[ASMediaFocusManager alloc] init];
+    self.mediaFocusManager.delegate = self;
     
     sesion *s = [sesion sharedInstance];
     NSNumber* id_p = [NSNumber numberWithInteger:id_party];
     [[party_dao sharedInstance] getParty:s.codigo_conexion item_id:id_p y:^(NSArray *party, NSError *error){
         if (!error) {
             NSDictionary* party_json = [party objectAtIndex:0];
+            
+            NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
+            [f setNumberStyle:NSNumberFormatterDecimalStyle];
+            
+            NSNumber *id_sitio =[f numberFromString:[[party_json objectForKey:@"place"] objectForKey:@"id" ]];
+            
+            UIButton *buttonLugar = [[UIButton alloc] initWithFrame:CGRectMake(150, 1, 160, 21)];
+            [_vista_agenda_info addSubview:buttonLugar];
+            [buttonLugar addTarget:self action:@selector(ir_a_ficha_sitio:) forControlEvents:UIControlEventTouchUpInside];
+            [buttonLugar setTag:[id_sitio intValue]];
+            
             NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[party_json valueForKey:@"img"]]];
             [_imagen setImage:[UIImage imageWithData:imageData]];
-            _precioLabel.text = [[party_json valueForKey:@"price"] stringByAppendingString:@"€"];
+            NSLocale *us = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US"];
+            [f setLocale: us];
+            NSNumber *precio =[f numberFromString:[party_json valueForKey:@"price"]];
+            _precioLabel.text = [[utils quitarDecimales:precio] stringByAppendingString:@"€"];
             _texto_mapa = [party_json valueForKey:@"name"];
             _cuandoLabel.text = [utils fechaConFormatoAgenda:[party_json valueForKey:@"start_date"]];
             _titulo_foto_label.text = [party_json valueForKey:@"name"];
-            NSDateFormatter* dfHour = [[NSDateFormatter alloc] init];
-            [dfHour setDateFormat:@"HH:MM"];
-            _hora_label.text = [dfHour stringFromDate:[[NSDate alloc] init]];
+            _hora_label.text = [utils horaFromString:[party_json valueForKey:@"start_date"]];
             _localizacion_label.text = [[party_json valueForKey:@"place"] valueForKey:@"name"];
             [_localizacion_label sizeToFit];
+            _raffle = [[NSString alloc] init];
+            _raffle = nil;
             if([party_json valueForKey:@"raffle"]!= nil){
                 _raffle_author = [[NSString alloc] init];
-                _raffle = [[NSString alloc] init];
                 _raffle_author = [[party_json valueForKey:@"raffle"] valueForKey:@"author"];
                 _raffle = [[party_json valueForKey:@"raffle"] valueForKey:@"title"];
             }
             
+            [_icono_donde setTranslatesAutoresizingMaskIntoConstraints:YES];
+            [_localizacion_label setTranslatesAutoresizingMaskIntoConstraints:YES];
             CGRect frame = _icono_donde.frame;
-            frame.origin.x = 290 - _localizacion_label.frame.size.width;
+            frame.origin.x = 300 - _localizacion_label.frame.size.width;
             _icono_donde.frame = frame;
             
             frame = _localizacion_label.frame;
             frame.origin.x = 310 - _localizacion_label.frame.size.width;
             _localizacion_label.frame = frame;
+            
             _link_apuntarse = [[NSString alloc] init];
             _link_comprar = [[NSString alloc] init];
             _link_apuntarse = [party_json valueForKey:@"list_link"];
@@ -127,18 +153,12 @@
             
             [self autoHeight];
             [self construir_contenido:party_json];
-            
         } else {
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
     
-    if(s.latitude!=nil && s.latitude!=0){
+    if([s.latitude intValue] == 0){
         [self shakeView];
     }
     else{
@@ -152,8 +172,125 @@
     _localizacion_label.font = FONT_BEBAS(15.0f);
 }
 
+- (void)viewWillDisappear:(BOOL)animated{
+    if(!_degradado_menu.hidden){
+        [self.radialMenu buttonsWillAnimateFromButton:_menu_button withFrame:self.menu_button.frame inView:self.view];
+        [UIView transitionWithView:_degradado_menu
+                          duration:0.8
+                           options:
+         UIViewAnimationOptionTransitionCrossDissolve
+                        animations:NULL
+                        completion:NULL];
+        _degradado_menu.hidden = true;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController willMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController didMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
 - (void)embeds_finales:(NSDictionary*)json_content{
-    int y = self.altura_vista.constant;
+    //int y = self.altura_vista.constant;
+    int y =  _view_scroll.frame.size.height;
+
+    
+    [self autoHeight];
+    //Construimos lo restante
+    UIView* titulonformacion = [constructorVistas construirTituloOscuro:@"Informacion" poscion:self.altura_vista.constant];
+    titulonformacion.tag=7;
+    UIView* viewInformacion = [UIView new];
+    viewInformacion.translatesAutoresizingMaskIntoConstraints = NO;
+    
+    [_view_scroll addSubview:titulonformacion];
+    [_view_scroll addSubview:viewInformacion];
+    viewInformacion.tag = 7;
+    int altura_informacion = 8;
+    if([json_content valueForKey:@"price_text"]!=nil && ![[json_content valueForKey:@"price_text"] isEqualToString:@""]){
+        UIImageView *priceCode = [[UIImageView alloc] initWithFrame:CGRectMake(10, altura_informacion, 83, 31)];
+        [priceCode setImage:[UIImage imageNamed:@"5_icon_PRECIO_ENTRADA.png"]];
+        UILabel* priceLabel = [[UILabel alloc] initWithFrame:CGRectMake(45, altura_informacion + 8, 200, 21)];
+        priceLabel.text = [json_content valueForKey:@"price_text"];
+        priceLabel.font = FONT_BEBAS(15.0f);
+        [viewInformacion addSubview:priceCode];
+        [viewInformacion addSubview:priceLabel];
+        altura_informacion = altura_informacion + 36;
+    }
+    if([json_content valueForKey:@"schedule_text"]!=nil && ![[json_content valueForKey:@"schedule_text"] isEqualToString:@""]){
+        UIImageView *scheduleCode = [[UIImageView alloc] initWithFrame:CGRectMake(10, altura_informacion, 62, 31)];
+        [scheduleCode setImage:[UIImage imageNamed:@"5_icon_HORARIO.png"]];
+        UILabel* scheduleLabel = [[UILabel alloc] initWithFrame:CGRectMake(45, altura_informacion+8, 200, 21)];
+        scheduleLabel.text = [json_content valueForKey:@"schedule_text"];
+        scheduleLabel.font = FONT_BEBAS(15.0f);
+        [viewInformacion addSubview:scheduleCode];
+        [viewInformacion addSubview:scheduleLabel];
+        altura_informacion = altura_informacion + 36;
+    }
+    if([json_content valueForKey:@"dresscode_text"]!=nil && ![[json_content valueForKey:@"dresscode_text"] isEqualToString:@""]){
+        UIImageView *dressCode = [[UIImageView alloc] initWithFrame:CGRectMake(10,altura_informacion, 69, 31)];
+        [dressCode setImage:[UIImage imageNamed:@"5_icon_DRESSCODE.png"]];
+        UILabel* dressLabel = [[UILabel alloc] initWithFrame:CGRectMake(45, altura_informacion+8, 200, 21)];
+        dressLabel.text = [json_content valueForKey:@"dresscode_text"];
+        dressLabel.font = FONT_BEBAS(15.0f);
+        [viewInformacion addSubview:dressCode];
+        [viewInformacion addSubview:dressLabel];
+        altura_informacion = altura_informacion + 36;
+    }
+    if([json_content valueForKey:@"address_text"]!=nil && ![[json_content valueForKey:@"address_text"] isEqualToString:@""]){
+        UIImageView *addressCode = [[UIImageView alloc] initWithFrame:CGRectMake(10, altura_informacion, 66, 31)];
+        [addressCode setImage:[UIImage imageNamed:@"5_icon_direccion.png"]];
+        UILabel* addressLabel = [[UILabel alloc] initWithFrame:CGRectMake(45, altura_informacion+8, 200, 21)];
+        addressLabel.text = [json_content valueForKey:@"address_text"];
+        addressLabel.font = FONT_BEBAS(15.0f);
+        [viewInformacion addSubview:addressCode];
+        [viewInformacion addSubview:addressLabel];
+        altura_informacion = altura_informacion + 36;
+    }
+    altura_informacion = altura_informacion;
+    MKMapView* mapa = [[MKMapView alloc] initWithFrame:CGRectMake(0, altura_informacion, 320, 170)];
+    [self showMap:[[json_content valueForKey:@"lat"] doubleValue] longitude: [[json_content valueForKey:@"lng"] doubleValue] mapa:mapa en:viewInformacion];
+    //[self autoHeight];
+    altura_informacion = altura_informacion + 190;
+    if(![_link_apuntarse isEqualToString:@""]){
+        UIButton *buttonApuntarse = [[UIButton alloc] initWithFrame:CGRectMake(0, altura_informacion, 320, 46)];
+        [buttonApuntarse setBackgroundImage:[UIImage imageNamed:@"5_button_APUNTARSE_LISTA.png"] forState:UIControlStateNormal];
+        [buttonApuntarse addTarget:self action:@selector(apuntarse_lista:) forControlEvents:UIControlEventTouchUpInside];
+        [viewInformacion addSubview:buttonApuntarse];
+        altura_informacion = altura_informacion + 48;
+        buttonApuntarse.tag=7;
+    }
+    if(![_link_comprar isEqualToString:@""]){
+        UIButton *buttonComprar = [[UIButton alloc] initWithFrame:CGRectMake(0,     altura_informacion, 320, 46)];
+        [buttonComprar setBackgroundImage:[UIImage imageNamed:@"5_button_COMPRAR_ENTRADAS.png"] forState:UIControlStateNormal];
+        [buttonComprar addTarget:self action:@selector(comprar_entradas:) forControlEvents:UIControlEventTouchUpInside];
+        [viewInformacion addSubview:buttonComprar];
+        altura_informacion = altura_informacion + 48;
+        buttonComprar.tag=7;
+    }
+    float w = 0;
+    float h = 0;
+    for (UIView *v in [viewInformacion subviews]) {
+        float fw = v.frame.origin.x + v.frame.size.width;
+        float fh = v.frame.origin.y + v.frame.size.height;
+        w = MAX(fw, w);
+        h = MAX(fh, h);
+    }
+    [viewInformacion setFrame:CGRectMake(viewInformacion.frame.origin.x, viewInformacion.frame.origin.y, w, h+5)];
+    
+    
     for(NSDictionary* json in [[json_content objectForKey:@"content"] objectForKey:@"content_gallery_embeds"]){
         if([json valueForKey:@"name"] != nil && ![[json valueForKey:@"name"] isEqualToString:@""]){
             y = y +15;
@@ -169,70 +306,13 @@
             y = y + 15;
             [_view_scroll addSubview:[constructorVistas construirTitulo:[json objectForKey:@"name"] poscion:y]];
             y = y + 30;
-            [_view_scroll addSubview:[constructorVistas construir_scroll_images:json posicion:y]];
+            [_view_scroll addSubview:[self construir_scroll_images:json posicion:y]];
             y = y + 150;
         }
     }
-    [self autoHeight];
-    //Construimos lo restante
-    UIView* viewInformacion = [constructorVistas construirTituloOscuro:@"Informacion" poscion:self.altura_vista.constant];
-    [_view_scroll addSubview:viewInformacion];
-    int altura_informacion = self.altura_vista.constant+36;
-    if([json_content valueForKey:@"price_text"]!=nil && ![[json_content valueForKey:@"price_text"] isEqualToString:@""]){
-        UIImageView *priceCode = [[UIImageView alloc] initWithFrame:CGRectMake(10, altura_informacion, 83, 31)];
-        [priceCode setImage:[UIImage imageNamed:@"5_icon_PRECIO_ENTRADA.png"]];
-        UILabel* priceLabel = [[UILabel alloc] initWithFrame:CGRectMake(45, altura_informacion + 8, 100, 21)];
-        priceLabel.text = [json_content valueForKey:@"price_text"];
-        priceLabel.font = FONT_BEBAS(15.0f);
-        [_view_scroll addSubview:priceCode];
-        [_view_scroll addSubview:priceLabel];
-        altura_informacion = altura_informacion + 36;
-    }
-    if([json_content valueForKey:@"schedule_text"]!=nil && ![[json_content valueForKey:@"schedule_text"] isEqualToString:@""]){
-        UIImageView *scheduleCode = [[UIImageView alloc] initWithFrame:CGRectMake(10, altura_informacion, 62, 31)];
-        [scheduleCode setImage:[UIImage imageNamed:@"5_icon_HORARIO.png"]];
-        UILabel* scheduleLabel = [[UILabel alloc] initWithFrame:CGRectMake(45, altura_informacion+8, 100, 21)];
-        scheduleLabel.text = [json_content valueForKey:@"schedule_text"];
-        scheduleLabel.font = FONT_BEBAS(15.0f);
-        [_view_scroll addSubview:scheduleCode];
-        [_view_scroll addSubview:scheduleLabel];
-        altura_informacion = altura_informacion + 36;
-    }
-    if([json_content valueForKey:@"dresscode_text"]!=nil && ![[json_content valueForKey:@"dresscode_text"] isEqualToString:@""]){
-        UIImageView *dressCode = [[UIImageView alloc] initWithFrame:CGRectMake(10,altura_informacion, 69, 31)];
-        [dressCode setImage:[UIImage imageNamed:@"5_icon_DRESSCODE.png"]];
-        UILabel* dressLabel = [[UILabel alloc] initWithFrame:CGRectMake(45, altura_informacion+8, 100, 21)];
-        dressLabel.text = [json_content valueForKey:@"dresscode_text"];
-        dressLabel.font = FONT_BEBAS(15.0f);
-        [_view_scroll addSubview:dressCode];
-        [_view_scroll addSubview:dressLabel];
-        altura_informacion = altura_informacion + 36;
-    }
-    if([json_content valueForKey:@"address_text"]!=nil && ![[json_content valueForKey:@"address_text"] isEqualToString:@""]){
-        UIImageView *addressCode = [[UIImageView alloc] initWithFrame:CGRectMake(10, altura_informacion, 66, 31)];
-        [addressCode setImage:[UIImage imageNamed:@"5_icon_direccion.png"]];
-        UILabel* addressLabel = [[UILabel alloc] initWithFrame:CGRectMake(45, altura_informacion+8, 200, 21)];
-        addressLabel.text = [json_content valueForKey:@"address_text"];
-        addressLabel.font = FONT_BEBAS(15.0f);
-        [_view_scroll addSubview:addressCode];
-        [_view_scroll addSubview:addressLabel];
-        altura_informacion = altura_informacion + 36;
-    }
-    altura_informacion = altura_informacion;
-    MKMapView* mapa = [[MKMapView alloc] initWithFrame:CGRectMake(0, altura_informacion, 320, 170)];
-    [self showMap:[[json_content valueForKey:@"lat"] doubleValue] longitude: [[json_content valueForKey:@"lng"] doubleValue] mapa:mapa];
-    //[self autoHeight];
-    altura_informacion = altura_informacion + 170;
-    UIButton *buttonApuntarse = [[UIButton alloc] initWithFrame:CGRectMake(0, altura_informacion, 320, 46)];
-    [buttonApuntarse setBackgroundImage:[UIImage imageNamed:@"5_button_APUNTARSE_LISTA.png"] forState:UIControlStateNormal];
-    [buttonApuntarse addTarget:self action:@selector(apuntarse_lista:) forControlEvents:UIControlEventTouchUpInside];
-    [_view_scroll addSubview:buttonApuntarse];
-    altura_informacion = altura_informacion + 48;
-    UIButton *buttonComprar = [[UIButton alloc] initWithFrame:CGRectMake(0, altura_informacion, 320, 46)];
-    [buttonComprar setBackgroundImage:[UIImage imageNamed:@"5_button_COMPRAR_ENTRADAS.png"] forState:UIControlStateNormal];
-    [buttonComprar addTarget:self action:@selector(comprar_entradas:) forControlEvents:UIControlEventTouchUpInside];
-    [_view_scroll addSubview:buttonComprar];
-    [self autoHeight];
+    
+    
+    [self ordenar_vistas];
 }
 
 
@@ -247,47 +327,72 @@
             codigo_sin_corchetes = [codigo_sin_corchetes substringToIndex:codigo_sin_corchetes.length -2];
             for(NSDictionary* json in [[json_content objectForKey:@"content"] objectForKey:@"content_gallery_embeds"]){
                 if([[json valueForKey:@"code"] isEqualToString:codigo_sin_corchetes]){
-                    if([json valueForKey:@"name"] != nil && ![[json valueForKey:@"name"] isEqualToString:@""]){
-                        [_view_scroll addSubview:[constructorVistas construirTitulo:[json objectForKey:@"name"] poscion:y]];
-                        y = y+30;
-                    }
                     [_view_scroll addSubview:[constructorVistas construir_scroll_embeds:json posicion:y]];
-                    y = y+150;
+                    y = y+160;
                 }
             }
-            
             for(NSDictionary* json in [[json_content objectForKey:@"content"] objectForKey:@"content_gallery_images"]){
                 if([[json valueForKey:@"code"] isEqualToString:codigo_sin_corchetes]){
-                    if([json valueForKey:@"name"] != nil && ![[json valueForKey:@"name"] isEqualToString:@""]){
-                        [_view_scroll addSubview:[constructorVistas construirTitulo:[json objectForKey:@"name"] poscion:y]];
-                        y = y+30;
-                    }
-                    [_view_scroll addSubview:[constructorVistas construir_scroll_images:json posicion:y]];
-                    y = y+150;
+                    [_view_scroll addSubview:[self construir_scroll_images:json posicion:y]];
+                    y = y+160;
                 }
             }
         }
-        else if(![x isEqualToString:@""]){
-            UITextView *myTextView = [[UITextView alloc] initWithFrame:CGRectMake(0, y, 320, 400)];
-            [myTextView setUserInteractionEnabled:NO];
-            [myTextView setBackgroundColor:[UIColor colorWithRed:233/255.0f green:233/255.0f blue:233/255.0f alpha:1.0]];
-            NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithData:[x dataUsingEncoding:NSUnicodeStringEncoding] options:@{ NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType } documentAttributes:nil error:nil];
-            
-            UIFont *font=[UIFont fontWithName:@"Arial-BoldMT" size:13.0f];
-            NSMutableParagraphStyle *paragrapStyle = [[NSMutableParagraphStyle alloc] init];
-            paragrapStyle.alignment = NSTextAlignmentCenter;
-            NSInteger stringLength=[attributedString length];
-            [attributedString addAttribute:NSFontAttributeName value:font range:NSMakeRange(0, stringLength)];
-            [attributedString addAttribute:NSParagraphStyleAttributeName value:paragrapStyle range:NSMakeRange(0, stringLength)];
-            
-            myTextView.attributedText = attributedString;
-            [myTextView sizeToFit];
-            y = y + myTextView.frame.size.height;
-            [_view_scroll addSubview:myTextView];
+        else if(![x isEqualToString:@""] && ![x isEqualToString:@"</p>"]){
+            UIWebView *myWebView = [[UIWebView alloc] initWithFrame:CGRectMake(0, y, 320, 50)];
+            [myWebView setBackgroundColor:[UIColor colorWithRed:233/255.0f green:233/255.0f blue:233/255.0f alpha:1.0]];
+            NSString *myDescriptionHTML = [NSString stringWithFormat:@"<html> \n"
+                                           "<head><style type=\"text/css\">body{font-family: \"%@\";color: #555555;text-align: center;}p{color:#555555;font-size: 14px;font-weight: bold;}strong{color:#037c61;}a{color: #037c61;text-decoration: underline;}</style></head><body>%@</body></html>", @"Arial-BoldMT", x];
+            [myWebView loadHTMLString:myDescriptionHTML baseURL:nil];
+            [myWebView setDelegate:self];
+            y = y + myWebView.frame.size.height;
+            [_view_scroll addSubview:myWebView];
         }
     }
     [self autoHeight];
     [self show_items_relacionados:json_content];
+}
+
+- (void) webViewDidFinishLoad:(UIWebView *)webView
+{
+    CGRect frame = webView.frame;
+    CGSize fittingSize = [webView sizeThatFits:webView.scrollView.contentSize];
+    frame.size = fittingSize;
+    webView.frame = frame;
+    [self ordenar_vistas];
+}
+
+- (void)ordenar_vistas{
+    int y = 270;
+    for(UIView* v in _view_scroll.subviews){
+        if([v isKindOfClass:[UIWebView class]]){
+            CGRect newFrame = v.frame;
+            newFrame.origin.y = y;
+            v.frame = newFrame;
+            y = y + v.frame.size.height;
+        }
+        else if([v isKindOfClass:[UIScrollView class]] || [v isKindOfClass:[UITextView class]]){
+            CGRect newFrame = v.frame;
+            newFrame.origin.y = y;
+            v.frame = newFrame;
+            y = y + v.frame.size.height;
+        }
+        else if([v tag]==7){
+            CGRect newFrame = v.frame;
+            newFrame.origin.y = y;
+            v.frame = newFrame;
+            y = y + v.frame.size.height;
+        }
+    }
+}
+
+-(BOOL) webView:(UIWebView *)inWeb shouldStartLoadWithRequest:(NSURLRequest *)inRequest navigationType:(UIWebViewNavigationType)inType {
+    if ( inType == UIWebViewNavigationTypeLinkClicked ) {
+        [[UIApplication sharedApplication] openURL:[inRequest URL]];
+        return NO;
+    }
+    
+    return YES;
 }
 
 - (void)show_items_relacionados:(NSDictionary*)json_content{
@@ -299,9 +404,11 @@
     [[articles_dao sharedInstance] getRelatedItems:s.codigo_conexion kind:tipo_fiesta item_id:id_a related_kind:tipo_artistas limit:@10 page:@1 y:^(NSArray *artistas, NSError *error) {
         if (!error) {
             if([artistas count]>0){
-                [_view_scroll addSubview:[constructorVistas construirTitulo:@"Artistas Relacionados" poscion:_view_scroll.frame.size.height]];
+                [_view_scroll addSubview:[constructorVistas construirTitulo:@"Line Up" poscion:_view_scroll.frame.size.height]];
                 NSValue *irArtistas = [NSValue valueWithPointer:@selector(verArtista:)];
                 [_view_scroll addSubview:[constructorVistas scrollLateral:artistas posicion:_view_scroll.frame.size.height selector:irArtistas controllerBase:self]];
+                [self autoHeight];
+                [self embeds_finales:json_content];
                 [self autoHeight];
             }
             NSNumber* tipo_sitio = [[NSNumber alloc] initWithInt:[utils getKind:@"Sitio"]];
@@ -328,7 +435,7 @@
                                     if([sellos count]>0){
                                         [_view_scroll addSubview:[constructorVistas construirTitulo:@"Sellos Relacionados" poscion:_view_scroll.frame.size.height]];
                                         NSValue *irSellos = [NSValue valueWithPointer:@selector(verSello:)];
-                                        [_view_scroll addSubview:[constructorVistas scrollLateralItemsPeques:articulos posicion:_view_scroll.frame.size.height selector:irSellos controllerBase:self]];
+                                        [_view_scroll addSubview:[constructorVistas scrollLateralItemsPeques:sellos posicion:_view_scroll.frame.size.height selector:irSellos controllerBase:self]];
                                         [self autoHeight];
                                     }
                                     NSNumber* tipo_entrevista = [[NSNumber alloc] initWithInt:[utils getKind:@"Entrevista"]];
@@ -337,10 +444,9 @@
                                             if([entrevistas count]>0){
                                                 [_view_scroll addSubview:[constructorVistas construirTitulo:@"Entrevistas Relacionadas" poscion:_view_scroll.frame.size.height]];
                                                 NSValue *irArticulos = [NSValue valueWithPointer:@selector(verArticulo:)];
-                                                [_view_scroll addSubview:[constructorVistas scrollLateral:articulos posicion:_view_scroll.frame.size.height selector:irArticulos controllerBase:self]];
+                                                [_view_scroll addSubview:[constructorVistas scrollLateral:entrevistas posicion:_view_scroll.frame.size.height selector:irArticulos controllerBase:self]];
                                                 [self autoHeight];
                                             }
-                                            [self embeds_finales:json_content];
                                         } else {
                                             // Error hacer al recoger los items relacionados
                                             NSLog(@"Error al recoger el card: %@", error);
@@ -351,50 +457,23 @@
                                                                                      otherButtonTitles:nil];
                                             [theAlert show];
                                         }
+                                        [self ordenar_vistas];
                                     }];
                                 } else {
-                                    // Error hacer al recoger los items relacionados
-                                    NSLog(@"Error al recoger el card: %@", error);
-                                    UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                                       message:[error localizedDescription]
-                                                                                      delegate:self
-                                                                             cancelButtonTitle:@"OK"
-                                                                             otherButtonTitles:nil];
-                                    [theAlert show];
+                                    [utils controlarErrores:error];
                                 }
                             }];
                         } else {
-                            // Error hacer al recoger los items relacionados
-                            NSLog(@"Error al recoger el card: %@", error);
-                            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                               message:[error localizedDescription]
-                                                                              delegate:self
-                                                                     cancelButtonTitle:@"OK"
-                                                                     otherButtonTitles:nil];
-                            [theAlert show];
+                            [utils controlarErrores:error];
                         }
                     }];
                 } else {
-                    // Error hacer al recoger los items relacionados
-                    NSLog(@"Error al recoger el card: %@", error);
-                    UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                       message:[error localizedDescription]
-                                                                      delegate:self
-                                                             cancelButtonTitle:@"OK"
-                                                             otherButtonTitles:nil];
-                    [theAlert show];
+                    [utils controlarErrores:error];
                 }
             }];
             
         } else {
-            // Error hacer al recoger los items relacionados
-            NSLog(@"Error al recoger el card: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
     
@@ -463,7 +542,7 @@
     {
         scrollViewHeight += view.frame.size.height;
     }
-    self.altura_vista.constant = scrollViewHeight-68-21-35-35;
+    self.altura_vista.constant = scrollViewHeight-21-35-35;
 }
 
 
@@ -484,7 +563,8 @@
              if([[party objectAtIndex:0] boolValue]){
                  [_button_anadir_a_mis_planes setImage:[UIImage imageNamed:@"5_button_QUITAR_PLANES.png"] forState:UIControlStateNormal];
                  _button_anadir_a_mis_planes.tag = 1;
-                 if(_raffle!=nil && ![_raffle isEqualToString:@""]){
+                 if(![_raffle isEqual:[NSNull null]]){
+                     if(![_raffle isEqualToString:@""]){
                      _raffle_author_label.font = FONT_BEBAS(17.0f);
                      _raffle_sortea_label.font = FONT_BEBAS(17.0f);
                      _raffle_title_label.font = FONT_BEBAS(17.0f);
@@ -498,6 +578,7 @@
                                                      repeats:NO];
                      UITapGestureRecognizer *tapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self  action:@selector(aTime)];
                      [_entrado_sorteo_modal addGestureRecognizer:tapRecognizer];
+                     }
                  }
                  else{
                      _modal_plan_anadido.hidden = false;
@@ -523,12 +604,7 @@
                  
              }
          } else {
-             UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                message:[error localizedDescription]
-                                                               delegate:self
-                                                      cancelButtonTitle:@"OK"
-                                                      otherButtonTitles:nil];
-             [theAlert show];
+             [utils controlarErrores:error];
          }
          }];
     } else {
@@ -537,20 +613,15 @@
                 [_button_anadir_a_mis_planes setImage:[UIImage imageNamed:@"5_button_ANADIR_PLANES.png"] forState:UIControlStateNormal];
                 _button_anadir_a_mis_planes.tag = 0;
             } else {
-                UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                   message:[error localizedDescription]
-                                                                  delegate:self
-                                                         cancelButtonTitle:@"OK"
-                                                         otherButtonTitles:nil];
-                [theAlert show];
+                [utils controlarErrores:error];
             }
         }];
     }
 }
 
-- (void)showMap:(double)latitude longitude:(double)longitude mapa:(MKMapView*) mapa
+- (void)showMap:(double)latitude longitude:(double)longitude mapa:(MKMapView*) mapa en: (UIView*)view
 {
-    [_scroll_view insertSubview:mapa atIndex:20 ];
+    [view insertSubview:mapa atIndex:20 ];
     
     CLLocationCoordinate2D zoomLocation;
     zoomLocation.latitude = latitude;
@@ -563,9 +634,24 @@
     [mapa setRegion:viewRegion animated:YES];
     UIButton *button = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     button.frame = CGRectMake(10, 10, 120, 160);
+    button.tag = 7;
     [mapa addSubview:button];
-    [_view_scroll addSubview:button];
+    [view addSubview:button];
     [self autoHeight];
+}
+
+-(void)ir_a_ficha_sitio:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sitio"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
 }
 
 -(void)aTime
@@ -648,13 +734,13 @@
 
 #pragma mark - radial menu delegate methods
 - (NSInteger) numberOfItemsInRadialMenu:(ALRadialMenu *)radialMenu {
-    return 3;
+    return 2;
 }
 
 
 - (NSInteger) arcSizeForRadialMenu:(ALRadialMenu *)radialMenu {
     //Tamaño en grados de lo que ocupa el menu
-    return 65;
+    return 40;
 }
 
 
@@ -674,8 +760,6 @@
 			return [UIImage imageNamed:@"1_ACTUALIDAD"];
 		} else if (index == 2) {
 			return [UIImage imageNamed:@"1_AGENDA"];
-		} else if (index == 3) {
-			return [UIImage imageNamed:@"1_SORTEOS"];
 		}
         
 	}
@@ -703,13 +787,6 @@
             
             [self.navigationController pushViewController:agendaController animated:YES];
 			
-		} else if (index == 3) {
-            //Se hace click en el label de sorteos
-            
-            sorteosIndexViewController *sorteosController =
-            [storyboard instantiateViewControllerWithIdentifier:@"sorteosIndexViewController"];
-            
-            [self.navigationController pushViewController:sorteosController animated:YES];
 		}
 	}
 }
@@ -721,7 +798,101 @@
 - (IBAction)menuButton:(id)sender {
 }
 
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
+}
 
+#pragma mark - ASMediaFocusDelegate
+// Returns an image view that represents the media view. This image from this view is used in the focusing animation view. It is usually a small image.
+- (UIImageView *)mediaFocusManager:(ASMediaFocusManager *)mediaFocusManager imageViewForView:(UIView *)view;
+{
+    return (UIImageView *)view;
+}
+
+// Returns the final focused frame for this media view. This frame is usually a full screen frame.
+- (CGRect)mediaFocusManager:(ASMediaFocusManager *)mediaFocusManager finalFrameForView:(UIView *)view
+{
+    return self.parentViewController.view.bounds;
+}
+
+// Returns the view controller in which the focus controller is going to be added.
+// This can be any view controller, full screen or not.
+- (UIViewController *)parentViewControllerForMediaFocusManager:(ASMediaFocusManager *)mediaFocusManager
+{
+    return self.parentViewController;
+}
+
+// Returns an URL where the image is stored. This URL is used to create an image at full screen. The URL may be local (file://) or distant (http://).
+- (NSURL *)mediaFocusManager:(ASMediaFocusManager *)mediaFocusManager mediaURLForView:(UIView *)view
+{
+    NSURL *url;
+    url = [NSURL fileURLWithPath:view.restorationIdentifier];
+    return url;
+}
+
+// Returns the title for this media view. Return nil if you don't want any title to appear.
+- (NSString *)mediaFocusManager:(ASMediaFocusManager *)mediaFocusManager titleForView:(UIView *)view
+{
+    return @"";
+}
+
+- (void) image:(NSDictionary *)image unElemento:(bool)unElemento en:(UIScrollView*)scrollView{
+    UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
+    imageView.restorationIdentifier =[image objectForKey:@"image"];
+    [imageView setTag:5];
+    [utils downloadImageWithURL:[NSURL URLWithString:[image objectForKey:@"image"]] completionBlock:^(BOOL succeeded, UIImage *image) {
+        if (succeeded) {
+            int anchura_embed = 240;
+            int altura_embed = 160;
+            CGFloat posicion = 0.0f;
+            if(unElemento){
+                anchura_embed = 270;
+                altura_embed = 184;
+                posicion = 30;
+            }
+            UIImage* new_image = [constructorVistas imageWithImage:image
+                                                  scaledToMaxWidth:anchura_embed
+                                                         maxHeight:altura_embed];
+            for(UIView* v in scrollView.subviews){
+                if(v.frame.size.width>10){
+                    posicion = posicion + v.frame.size.width+5 ;
+                }
+            }
+            if(posicion==0){
+                posicion=2;
+            }
+            imageView.frame = CGRectMake(posicion, 0, new_image.size.width, new_image.size.height);
+            [imageView setImage:image];
+            imageView.userInteractionEnabled = YES;
+            [scrollView addSubview:imageView];
+            CGFloat scrollViewWidth = 0.0f;
+            for (UIWebView* view in scrollView.subviews)
+            {
+                scrollViewWidth += view.frame.size.width;
+            }
+            [scrollView setContentSize:(CGSizeMake(scrollViewWidth, 150))];
+            imageView.userInteractionEnabled = YES;
+            [self.imageViews addObject:imageView];
+            [self.mediaFocusManager installOnViews:self.imageViews];
+        }
+    }];
+}
+
+- (UIScrollView*)construir_scroll_images:(NSDictionary*) json posicion:(int) posicion{
+    UIScrollView* scrollLateral = [[UIScrollView alloc] initWithFrame:CGRectMake(0, posicion, 320, 170)];
+    scrollLateral.tag= 15;
+    [scrollLateral setBackgroundColor:[UIColor colorWithRed: 233/255.0f green:233/255.0f blue:233/255.0f alpha:1.0]];
+    
+    for(NSDictionary* image in [json objectForKey:@"images"]){
+        [self image:image unElemento:[[json objectForKey:@"images"] count]==1 en:scrollLateral];
+    }
+    return scrollLateral;
+}
 
 /*
 #pragma mark - Navigation

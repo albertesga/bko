@@ -10,6 +10,8 @@
 #import "backgroundAnimate.h"
 #import "register_dao.h"
 #import "mailEnviadoViewController.h"
+#import "utils.h"
+#import "sinConexionViewController.h"
 
 @interface registerNoFbViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *por_favor;
@@ -39,6 +41,7 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self conectado];
     // Do any additional setup after loading the view.
     _si_no_facebook.font = FONT_BEBAS(18.0f);
     _por_favor.font = FONT_BEBAS(18.0f);
@@ -51,15 +54,22 @@
     UIView *paddingView3 = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
     paddingView3.backgroundColor = [UIColor clearColor];
     UIView *paddingView4 = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 5, 20)];
+    UIColor *color = [UIColor blackColor];
     paddingView4.backgroundColor = [UIColor clearColor];
     self.nombre.leftView = paddingView;
+    self.nombre.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Nombre..." attributes:@{NSForegroundColorAttributeName: color}];
     self.nombre.leftViewMode = UITextFieldViewModeAlways;
     self.email.leftView = paddingView2;
     self.email.leftViewMode = UITextFieldViewModeAlways;
+    self.email.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Dirección e-mail..." attributes:@{NSForegroundColorAttributeName: color}];
     self.apellidos.leftView = paddingView3;
     self.apellidos.leftViewMode = UITextFieldViewModeAlways;
+    self.apellidos.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Apellidos..." attributes:@{NSForegroundColorAttributeName: color}];
     self.fecha_nacimiento.leftView = paddingView4;
     self.fecha_nacimiento.leftViewMode = UITextFieldViewModeAlways;
+    self.fecha_nacimiento.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Tu fecha de nacimiento..." attributes:@{NSForegroundColorAttributeName: color}];
+    
+    
 }
 
 - (BOOL)textFieldShouldReturn:(UITextField *)theTextField {
@@ -138,13 +148,7 @@
             
             } else {
                 // Error processing
-                NSLog(@"Error en la llamada del registro: %@", error);
-                UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-                [theAlert show];
+                [utils controlarErrores:error];
             }
     }];
     }
@@ -205,10 +209,18 @@
     [whiteView addGestureRecognizer:tapGesture];
     [self.view addSubview:whiteView];
     
+    NSDateComponents* dc = [[NSDateComponents alloc] init];
+    [dc setYear:2000];
+    [dc setMonth:12];
+    [dc setDay:31];
+    NSCalendar* c = [[NSCalendar alloc] initWithCalendarIdentifier:NSGregorianCalendar];
+    NSDate* date = [c dateFromComponents:dc];
+    
     UIDatePicker *datePicker = [[UIDatePicker alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height+44, 320, 216)];
     datePicker.tag = 10;
     datePicker.datePickerMode = UIDatePickerModeDate;
-    datePicker.maximumDate = [NSDate date];
+    //datePicker.maximumDate = date;
+    datePicker.date = date;
     [datePicker addTarget:self action:@selector(changeDate:) forControlEvents:UIControlEventValueChanged];
     [self.view addSubview:datePicker];
     
@@ -216,7 +228,11 @@
     toolBar.tag = 11;
     toolBar.barStyle = UIBarStyleBlackTranslucent;
     UIBarButtonItem *spacer = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-    UIBarButtonItem *doneButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(dismissDatePicker:)];
+    UIButton *customButton = [[UIButton alloc] initWithFrame:CGRectMake(10, 6, 60, 30)];
+    [customButton setTitle:@"Ok" forState:UIControlStateNormal];
+    [customButton addTarget:self action:@selector(dismissDatePicker:) forControlEvents:UIControlEventTouchUpInside];
+
+    UIBarButtonItem *doneButton = [[UIBarButtonItem alloc] initWithCustomView:customButton];
     [toolBar setItems:[NSArray arrayWithObjects:spacer, doneButton, nil]];
     [self.view addSubview:toolBar];
     [UIView beginAnimations:@"MoveIn" context:nil];
@@ -251,6 +267,14 @@
     [UIView commitAnimations];
 }
 
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
+}
 
 /*
 #pragma mark - Navigation

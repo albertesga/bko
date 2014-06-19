@@ -9,7 +9,8 @@
 #import <UIKit/UIKit.h>
 #import "ALRadialButton.h"
 #import "ALRadialMenu.h"
+#import "SWRevealViewController.h"
 
-@interface pasesGratisIndexViewController : UIViewController<ALRadialMenuDelegate>
+@interface pasesGratisIndexViewController : UIViewController<SWRevealViewControllerDelegate,ALRadialMenuDelegate,UITextFieldDelegate>
 @property (strong, nonatomic) ALRadialMenu *radialMenu;
 @end

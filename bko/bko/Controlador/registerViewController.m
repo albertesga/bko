@@ -16,6 +16,8 @@
 #import "Artists.h"
 #import "sesion.h"
 #import "message_dao.h"
+#import "sinConexionViewController.h"
+#import "loginViewController.h"
 
 @interface registerViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *registrate_label;
@@ -30,26 +32,34 @@
 @property (strong, nonatomic) NSString* location;
 @property (strong, nonatomic) NSMutableArray *likes;
 @property (strong, nonatomic) NSMutableArray *wall;
+@property (weak, nonatomic) IBOutlet UIImageView *modal_puede_tardar;
 @end
 
 @implementation registerViewController
 
 id<FBGraphUser> cachedUser;
+bool login_hecho = false;
 //bool array_lleno=false;
-
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
 
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [FBSession.activeSession closeAndClearTokenInformation];
     _registrate_label.font = FONT_BEBAS(18.0f);
     _por_favor_label.font = FONT_BEBAS(18.0f);
     _para_continuar_label.font = FONT_BEBAS(18.0f);
     if([utils userAllowedToUseApp]){
+        for (UIView* aux in [self.view subviews]){
+            if([aux isKindOfClass:[UILabel class]] || [aux isKindOfClass:[UIButton class]]){
+                aux.hidden = TRUE;
+            }
+        }
         [self loginAutomatico];
     }
     else{
-        FBLoginView *loginView = [[FBLoginView alloc] initWithReadPermissions:@[@"basic_info", @"email", @"user_likes"]];
+        //FBLoginView *loginView = [[FBLoginView alloc] initWithReadPermissions:@[@"basic_info", @"email", @"user_likes"]];
+        FBLoginView *loginView = [[FBLoginView alloc] initWithReadPermissions:@[@"public_profile", @"user_friends",@"email", @"user_likes"]];
     
         _backgroundImageView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     
@@ -79,10 +89,21 @@ id<FBGraphUser> cachedUser;
     }
 }
 
+-(void)logoutFacebook
+{
+    [FBSession.activeSession closeAndClearTokenInformation];
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (scrollView.contentOffset.y < -30) {
+        scrollView.contentOffset = CGPointMake(0, -30);
+    }
+}
+
 - (void)loginViewFetchedUserInfo:(FBLoginView *)loginView
                             user:(id<FBGraphUser>)user {
-    //Ponemos este if es porque esta funcion se llama dos veces, y solo nos interesa coger los datos y pasar al siguiente controlador cuando user tiene la información
-    if (![self isUser:cachedUser equalToUser:user]) {
+    if(!login_hecho){
+        login_hecho = true;
         cachedUser = user;
         _likes = [[NSMutableArray alloc]init];
         _wall = [[NSMutableArray alloc]init];
@@ -99,9 +120,11 @@ id<FBGraphUser> cachedUser;
 }
 
 -(void)getFBLikes:(NSString*)url {
+    NSLog(@"GET FACEBOOK LIKES");
     [FBRequestConnection startWithGraphPath:url
                           completionHandler:^(FBRequestConnection *connection, id result, NSError *error) {
                               if (!error) {
+                                  NSLog(@"GET FACEBOOK LIKES 2 %@",result);
                                   [self parseFBResultLikes:result];
                                   
                                   NSDictionary *paging = [result objectForKey:@"paging"];
@@ -110,13 +133,7 @@ id<FBGraphUser> cachedUser;
                                   [self getFBLikes:[next substringFromIndex:27]];
                                   
                               } else {
-                                  NSLog(@"Error recogiendo likes del Facebook: %@", [error localizedDescription]);
-                                  UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Title"
-                                                                                     message:@"Error recogiendo likes del Facebook"
-                                                                                    delegate:self
-                                                                           cancelButtonTitle:@"OK"
-                                                                           otherButtonTitles:nil];
-                                  [theAlert show];
+                                  [utils controlarErrores:error];
                               }
                           }];
 }
@@ -152,20 +169,20 @@ id<FBGraphUser> cachedUser;
 }
 
 -(void)registro {
+    login_hecho = true;
+    //_modal_puede_tardar.hidden = TRUE;
     if(![utils userAllowedToUseApp]){
     //Primero hacemos el registro
     [[register_dao sharedInstance] addUser:_email name:_first_name surname:_last_name birthdate:_birthday y:^(NSArray *password, NSError *error) {
      if (!error) {
          
          //Hacemos login para tener el código de conexión
-         NSLog(@"PASSWORD: %@",[password objectAtIndex:0]);
          
          NSString* password_md5 = [self md5:[password objectAtIndex:0]];
-         //TESTING
-         //_email = @"fdsdfe40@gmail.com";
+         
          [utils allowUserToUseApp:_email password:password_md5];
          
-         [[register_dao sharedInstance] login:_email password:password_md5 token:nil y:^(NSArray *connection, NSError *error) {
+         [[register_dao sharedInstance] login:_email password:password_md5 token:[utils retrieveToken] y:^(NSArray *connection, NSError *error) {
              if (!error) {
                  sesion *s = [sesion sharedInstance];
                  NSDictionary* con = [connection objectAtIndex:0];
@@ -179,18 +196,14 @@ id<FBGraphUser> cachedUser;
                          s.messages_unread = [c objectForKey:@"count"];
                      } else {
                          // Error processing
-                         NSLog(@"Error en la llamada del Recoger Mensajes: %@", error);
-                         UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                            message:[error localizedDescription]
-                                                                           delegate:self
-                                                                  cancelButtonTitle:@"OK"
-                                                                  otherButtonTitles:nil];
-                         [theAlert show];
+                         [utils controlarErrores:error];
                      }
                  }];
                  //Debemos hacer likes automáticos en el registro a través de facebook
                  [[register_dao sharedInstance] getAllFacebookArtists:^(NSArray *artists, NSError *error) {
                      if (!error) {
+                         NSLog(@"ARTISTAS %@",artists);
+                         NSLog(@"LIKES %@",_likes);
                          //Debemos hacer likes automáticos en el registro a través de facebook
                          int numero_likes=0;
                          for (NSDictionary *artist in artists) {
@@ -208,45 +221,49 @@ id<FBGraphUser> cachedUser;
                              [self presentViewController:actualidad animated:NO completion:nil];
                      } else {
                          // Error processing
-                         NSLog(@"Error en la llamada del login: %@", error);
-                         UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                            message:[error localizedDescription]
-                                                                           delegate:self
-                                                                  cancelButtonTitle:@"OK"
-                                                                  otherButtonTitles:nil];
-                         [theAlert show];
+                         [utils controlarErrores:error];
                      }
                  }];
              } else {
                  // Error processing
-                 NSLog(@"Error en la llamada del login: %@", error);
-                 UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                    message:[error localizedDescription]
-                                                                   delegate:self
-                                                          cancelButtonTitle:@"OK"
-                                                          otherButtonTitles:nil];
-                 [theAlert show];
+                 [utils controlarErrores:error];
              }
          }];
      } else {
-     // Error processing
-     NSLog(@"Error en la llamada del registro: %@", error);
-         UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                            message:[error localizedDescription]
-                                                           delegate:self
-                                                  cancelButtonTitle:@"OK"
-                                                  otherButtonTitles:nil];
-         [theAlert show];
+         _modal_puede_tardar.hidden = TRUE;
+         if([[error localizedDescription] isEqualToString:@"Este usuario ya está registrado. Por favor, identifícate."]){
+             //Ya se ha registrado anteriormente con el email
+             UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
+                                                                message:[error localizedDescription]
+                                                               delegate:self
+                                                      cancelButtonTitle:@"Ir al Login"
+                                                      otherButtonTitles:nil];
+             [theAlert show];
+             theAlert.tag = 10;
+             return;
+         }
+         /*else{
+             [utils controlarErrores:error];
+         }*/
      }
      }];
     }
     
 }
 
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex{
+    if (alertView.tag == 10){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main" bundle:nil];
+        loginViewController *login =
+        [storyboard instantiateViewControllerWithIdentifier:@"loginViewController"];
+        [self presentViewController:login animated:NO completion:nil];
+    }
+}
+
 -(void) loginAutomatico{
         //Hacemos el login a través del fichero
         NSDictionary* user_pass = [utils retriveUsernamePassword];
-        [[register_dao sharedInstance] login:[user_pass objectForKey:@"username"] password:[user_pass objectForKey:@"password"] token:nil y:^(NSArray *connection, NSError *error) {
+        [[register_dao sharedInstance] login:[user_pass objectForKey:@"username"] password:[user_pass objectForKey:@"password"] token:[utils retrieveToken] y:^(NSArray *connection, NSError *error) {
             if (!error) {
                 sesion *s = [sesion sharedInstance];
                 NSDictionary* con = [connection objectAtIndex:0];
@@ -260,7 +277,6 @@ id<FBGraphUser> cachedUser;
                         s.messages_unread = [c objectForKey:@"count"];
                     }
                 }];
-                //Debemos hacer likes automáticos en el registro a través de facebook
                 UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
                 SWRevealViewController *actualidad =
                 [storyboard instantiateViewControllerWithIdentifier:@"SWRevealViewController"];
@@ -268,12 +284,16 @@ id<FBGraphUser> cachedUser;
             } else {
                 // Error processing
                 NSLog(@"Error en la llamada del login: %@", error);
-                UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                                   message:[error localizedDescription]
-                                                                  delegate:self
-                                                         cancelButtonTitle:@"OK"
-                                                         otherButtonTitles:nil];
-                [theAlert show];
+                if([error.localizedDescription isEqualToString:@"The Internet connection appears to be offline."]){
+                    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+                    sinConexionViewController *sinConexion =
+                    [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+                    [self presentViewController:sinConexion animated:NO completion:nil];
+                }
+                else{
+
+                    [utils controlarErrores:error];
+                }
             }
         }];
 }
@@ -300,7 +320,13 @@ id<FBGraphUser> cachedUser;
 
 - (void) loginViewShowingLoggedInUser:(FBLoginView *)loginView
 {
-    NSLog(@"Empezamos Facebook Connect");
+    for (UIView* aux in [self.view subviews]){
+        if([aux isKindOfClass:[UILabel class]] || [aux isKindOfClass:[UIButton class]]){
+            aux.hidden = TRUE;
+        }
+    }
+    _modal_puede_tardar.hidden = FALSE;
+    [self.view bringSubviewToFront:_modal_puede_tardar];
 }
 
 
@@ -361,7 +387,7 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 }
 
 - (void)viewDidAppear:(BOOL)animated {
-    
+    login_hecho = false;
     //Llamamos al Singleton backgroundAnimate y ejecutamos la funcion que anima el background
     backgroundAnimate *background = [backgroundAnimate sharedInstance];
     [background animateBackground:self.backgroundImageView];
@@ -383,6 +409,15 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
     backgroundAnimate *background = [backgroundAnimate sharedInstance];
     [background animateBackground:self.backgroundImageView];
     [background applyCloudLayerAnimation];
+}
+
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
 }
 
 /*

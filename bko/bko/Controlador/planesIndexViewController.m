@@ -15,6 +15,11 @@
 #import "actualidadIndexViewController.h"
 #import "agendaIndexViewController.h"
 #import "sorteosIndexViewController.h"
+#import "sinConexionViewController.h"
+#import "utils.h"
+#import "articles_dao.h"
+#import "constructorVistas.h"
+#import "fichaViewController.h"
 
 @interface planesIndexViewController ()
 @property (weak, nonatomic) IBOutlet UIBarButtonItem *menu_lateral_button;
@@ -22,10 +27,18 @@
 
 @property (weak, nonatomic) IBOutlet UIImageView *degradado_menu;
 @property (weak, nonatomic) IBOutlet UIButton *menu_button;
+@property (weak, nonatomic) IBOutlet UITextField *textViewBuscar;
+@property (weak, nonatomic) IBOutlet UIView *viewBuscar;
 
 @end
 
 @implementation planesIndexViewController
+
+BOOL menu_user_abierto;
+
+int numero_resultados_planes = 0;
+NSString* ultima_busqueda_planes = @"";
+#define DEVICE_SIZE [[[[UIApplication sharedApplication] keyWindow] rootViewController].view convertRect:[[UIScreen mainScreen] bounds] fromView:nil].size
 
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
 
@@ -38,73 +51,15 @@
     return self;
 }
 
-
-- (void)calendar:(CKCalendarView *)calendar didSelectDate:(NSDate *)date {
-    for (UIView* v in _vista.subviews){
-        if(v.tag==2){
-            [v removeFromSuperview];
-        }
-    }
-    sesion *s = [sesion sharedInstance];
-    [[party_dao sharedInstance] getPlans:s.codigo_conexion date:date y:^(NSArray *places, NSError *error) {
-        if (!error) {
-            NSDateFormatter* dfDate = [[NSDateFormatter alloc] init];
-            [dfDate setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
-            for (NSDictionary *JSONnoteData in places) {
-                
-                NSDate* date2 = [dfDate dateFromString:[[JSONnoteData objectForKey:@"party"] objectForKey:@"start_date"]];
-                
-                if([calendar date:date isSameDayAsDate:date2]){
-                    [self mostrar_evento:JSONnoteData];
-                }
-                
-            }
-            [calendar reloadData];
-            
-        } else {
-            // Error processing
-            NSLog(@"Error al recoger places: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
-        }
-    }];
-}
-
-- (void)calendar:(CKCalendarView *)calendar didChangeToMonth:(NSDate *)date {
-    sesion *s = [sesion sharedInstance];
-    [[party_dao sharedInstance] getPlans:s.codigo_conexion date:date y:^(NSArray *places, NSError *error) {
-        if (!error) {
-            NSDateFormatter* dfDate = [[NSDateFormatter alloc] init];
-            [dfDate setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
-            for (NSDictionary *JSONnoteData in places) {
-                [calendar setDateWithEvent:[dfDate dateFromString:[[JSONnoteData objectForKey:@"party"] objectForKey:@"start_date"]]];
-            }
-            [calendar reloadData];
-            
-        } else {
-            // Error processing
-            NSLog(@"Error al recoger places: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
-        }
-    }];
-}
-
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self conectado];
     
-    UILabel *no_hay_eventos = [[UILabel alloc] initWithFrame:CGRectMake(20, 300, 280, 21)];
+    menu_user_abierto = false;
+    UILabel *no_hay_eventos = [[UILabel alloc] initWithFrame:CGRectMake(20, 320, 280, 21)];
     no_hay_eventos.font = FONT_BEBAS(16.0f);
-    no_hay_eventos.text = @"SELECCIONA UN DIA CON PLAN PARA VERLO EN DETALLE";
+    no_hay_eventos.text = @"SELECCIONA UN DÍA CON PLAN PARA VERLO EN DETALLE";
     no_hay_eventos.textAlignment = NSTextAlignmentCenter;
     no_hay_eventos.textColor = [UIColor colorWithRed:163.0/255.0f green:163.0/255.0f blue:163.0/255.0f alpha:1];
     
@@ -118,35 +73,176 @@
     
     [self.vista addSubview:no_hay_eventos];
     
+    [_viewBuscar setTranslatesAutoresizingMaskIntoConstraints:YES];
+    self.textViewBuscar.delegate=self;
+    
     CKCalendarView *calendar = [[CKCalendarView alloc] init];
     [_vista addSubview:calendar];
     calendar.delegate = self;
     
+    
     [self.menu_lateral_button setTarget: self.revealViewController];
     [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
-    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
-    self.revealViewController.rightViewRevealWidth = 118;
+    [self.revealViewController panGestureRecognizer];
+    [self.revealViewController tapGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 180;
+    self.revealViewController.delegate = self;
     sesion *s = [sesion sharedInstance];
     [[party_dao sharedInstance] getPlans:s.codigo_conexion date:[NSDate date] y:^(NSArray *places, NSError *error) {
         if (!error) {
             NSDateFormatter* dfDate = [[NSDateFormatter alloc] init];
             [dfDate setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
+            
             for (NSDictionary *JSONnoteData in places) {
-                [calendar setDateWithEvent:[dfDate dateFromString:[[JSONnoteData objectForKey:@"party"] objectForKey:@"start_date"]]];
+                
+                NSDate *date2 = [dfDate dateFromString:[[JSONnoteData objectForKey:@"party"] objectForKey:@"start_date"]];
+                
+                NSCalendar *nscalendar = [[NSCalendar alloc] initWithCalendarIdentifier:NSGregorianCalendar];
+                NSDateComponents *components = [nscalendar components:(NSHourCalendarUnit) fromDate:date2];
+                if([components hour]<=4){
+                    NSDateComponents *comps = [NSDateComponents new];
+                    comps.day = -1;
+                    date2 = [nscalendar dateByAddingComponents:comps toDate:date2 options:0];
+                }
+                [calendar setDateWithEvent:date2];
             }
             [calendar reloadData];
 
         } else {
-            // Error processing
-            NSLog(@"Error al recoger places: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
+}
+
+-(void)viewDidAppear:(BOOL)animated{
+    NSInteger numberOfViewControllers = self.navigationController.viewControllers.count;
+    if ([[self.navigationController.viewControllers objectAtIndex:numberOfViewControllers - 2] isKindOfClass:[self class]]){
+        NSMutableArray *allControllers = [[NSMutableArray alloc] initWithArray:self.navigationController.viewControllers];
+        [allControllers removeObjectAtIndex:[allControllers count] - 2];
+        [self.navigationController setViewControllers:allControllers animated:NO];
+    }
+}
+
+-(void)resetView
+{
+    [self.view setNeedsDisplay];
+    self.view=nil;
+    [self viewDidLoad];
+}
+
+-(void)viewWillAppear:(BOOL)animated
+{
+    [self resetView];
+}
+
+- (void)viewWillDisappear:(BOOL)animated{
+    if(!_degradado_menu.hidden){
+        [self.radialMenu buttonsWillAnimateFromButton:_menu_button withFrame:self.menu_button.frame inView:self.view];
+        [UIView transitionWithView:_degradado_menu
+                          duration:0.8
+                           options:
+         UIViewAnimationOptionTransitionCrossDissolve
+                        animations:NULL
+                        completion:NULL];
+        _degradado_menu.hidden = true;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+}
+
+- (void)revealController:(SWRevealViewController *)revealController willMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        _vista.userInteractionEnabled = YES;
+        menu_user_abierto = NO;
+    } else {
+        _vista.userInteractionEnabled = NO;
+        menu_user_abierto = YES;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController didMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        _vista.userInteractionEnabled = YES;
+        menu_user_abierto = NO;
+    } else {
+        _vista.userInteractionEnabled = NO;
+        menu_user_abierto = YES;
+    }
+}
+
+- (void)calendar:(CKCalendarView *)calendar didSelectDate:(NSDate *)date {
+    if (!menu_user_abierto){
+    for (UIView* v in _vista.subviews){
+        if(v.tag==2){
+            [v removeFromSuperview];
+        }
+    }
+    sesion *s = [sesion sharedInstance];
+    [[party_dao sharedInstance] getPlans:s.codigo_conexion date:date y:^(NSArray *places, NSError *error) {
+        if (!error) {
+            NSDateFormatter* dfDate = [[NSDateFormatter alloc] init];
+            [dfDate setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
+            for (NSDictionary *JSONnoteData in places) {
+                
+                NSDate *date2 = [dfDate dateFromString:[[JSONnoteData objectForKey:@"party"] objectForKey:@"start_date"]];
+                
+                NSCalendar *nscalendar = [[NSCalendar alloc] initWithCalendarIdentifier:NSGregorianCalendar];
+                NSDateComponents *components = [nscalendar components:(NSHourCalendarUnit) fromDate:date2];
+                if([components hour]<=4){
+                    NSDateComponents *comps = [NSDateComponents new];
+                    comps.day = -1;
+                    date2 = [nscalendar dateByAddingComponents:comps toDate:date2 options:0];
+                }
+                
+                if([calendar date:date isSameDayAsDate:date2]){
+                    [self mostrar_evento:JSONnoteData];
+                }
+                
+            }
+            [calendar reloadDataWithoutSelectedData];
+            
+        } else {
+            [utils controlarErrores:error];
+        }
+    }];
+    }
+}
+
+- (void)calendar:(CKCalendarView *)calendar didChangeToMonth:(NSDate *)date {
+    if (!menu_user_abierto){
+    sesion *s = [sesion sharedInstance];
+    [[party_dao sharedInstance] getPlans:s.codigo_conexion date:date y:^(NSArray *places, NSError *error) {
+        if (!error) {
+            NSDateFormatter* dfDate = [[NSDateFormatter alloc] init];
+            [dfDate setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
+            for (NSDictionary *JSONnoteData in places) {
+                NSDate *date2 = [dfDate dateFromString:[[JSONnoteData objectForKey:@"party"] objectForKey:@"start_date"]];
+                
+                NSCalendar *nscalendar = [[NSCalendar alloc] initWithCalendarIdentifier:NSGregorianCalendar];
+                NSDateComponents *components = [nscalendar components:(NSHourCalendarUnit) fromDate:date2];
+                if([components hour]<=4){
+                    NSDateComponents *comps = [NSDateComponents new];
+                    comps.day = -1;
+                    date2 = [nscalendar dateByAddingComponents:comps toDate:date2 options:0];
+                }
+                [calendar setDateWithEvent:date2];
+                
+                
+                //[calendar setDateWithEvent:[dfDate dateFromString:[[JSONnoteData objectForKey:@"party"] objectForKey:@"start_date"]]];
+            }
+            [calendar reloadData];
+            
+        } else {
+            [utils controlarErrores:error];
+        }
+    }];
+    }
 }
 
 - (void)mostrar_evento:(NSDictionary*)json {
@@ -169,47 +265,53 @@
     NSData *imageData = [NSData dataWithContentsOfURL:[NSURL URLWithString:[[json objectForKey:@"party"] objectForKey:@"list_img"]]];
     [imagen setImage:[UIImage imageWithData:imageData]];
     [agendaView addSubview:imagen];
-    UIView *cuandoView=[[UIView alloc]initWithFrame:CGRectMake(115, 7, 192, 20)];
+    UIView *cuandoView=[[UIView alloc]initWithFrame:CGRectMake(110, 7, 200, 20)];
     [cuandoView setBackgroundColor:[UIColor colorWithRed:79.0/255.0f green:79.0/255.0f blue:79.0/255.0f alpha:1]];
     [agendaView addSubview:cuandoView];
     UILabel *nombreAgenda = [[UILabel alloc] initWithFrame:CGRectMake(6, 0, 120, 21)];
     [cuandoView addSubview:nombreAgenda];
     nombreAgenda.text=[[json objectForKey:@"party"] objectForKey:@"list_name"];
     nombreAgenda.textColor=[UIColor whiteColor];
-    nombreAgenda.font = FONT_BEBAS(16.0f);
+    nombreAgenda.font = FONT_BEBAS(17.0f);
     
-    UIImageView *icono_reloj = [[UIImageView alloc] initWithFrame:CGRectMake(145, 5, 11, 11)];
+    UIImageView *icono_reloj = [[UIImageView alloc] initWithFrame:CGRectMake(153, 4, 11, 11)];
     [icono_reloj setImage:[UIImage imageNamed:@"5_icon_TIEMPO.png"]];
     [cuandoView addSubview:icono_reloj];
     
-    UILabel *cuandoAgenda = [[UILabel alloc] initWithFrame:CGRectMake(160, 0, 43, 21)];
+    UILabel *cuandoAgenda = [[UILabel alloc] initWithFrame:CGRectMake(167, 0, 43, 21)];
     [cuandoView addSubview:cuandoAgenda];
     
     NSString* date = [[[json objectForKey:@"party"] objectForKey:@"start_date"] substringFromIndex:11];
     cuandoAgenda.text= [date substringToIndex:5];
     cuandoAgenda.textColor=[UIColor whiteColor];
-    cuandoAgenda.font = FONT_BEBAS(16.0f);
+    cuandoAgenda.font = FONT_BEBAS(17.0f);
     
-    UIImageView *icono_donde = [[UIImageView alloc] initWithFrame:CGRectMake(120, 89, 13, 18)];
+    UIImageView *icono_donde = [[UIImageView alloc] initWithFrame:CGRectMake(115, 89, 13, 18)];
     [icono_donde setImage:[UIImage imageNamed:@"5_ICONO_PUNTO.png"]];
     [agendaView addSubview:icono_donde];
     
-    UITextView *descripcionAgenda = [[UITextView alloc] initWithFrame:CGRectMake(115, 28, 192, 57)];
+    UITextView *descripcionAgenda = [[UITextView alloc] initWithFrame:CGRectMake(108, 27, 200, 57)];
     [descripcionAgenda setBackgroundColor:[UIColor colorWithRed:215.0/255.0f green:215.0/255.0f blue:215.0/255.0f alpha:1]];
     [agendaView addSubview:descripcionAgenda];
     descripcionAgenda.text=[[json objectForKey:@"party"] objectForKey:@"list_description"];
     descripcionAgenda.textColor=[UIColor blackColor];
-    descripcionAgenda.font = FONT_BEBAS(13.0f);
+    descripcionAgenda.font = FONT_BEBAS(16.0f);
     descripcionAgenda.editable = NO;
     descripcionAgenda.scrollEnabled = NO;
     
-    UILabel *dondeAgenda = [[UILabel alloc] initWithFrame:CGRectMake(141, 87, 142, 21)];
+    UILabel *dondeAgenda = [[UILabel alloc] initWithFrame:CGRectMake(132, 89, 142, 21)];
     [agendaView addSubview:dondeAgenda];
     dondeAgenda.text=[json objectForKey:@"name"];
     dondeAgenda.textColor=[UIColor blackColor];
-    dondeAgenda.font = FONT_BEBAS(18.0f);
+    dondeAgenda.font = FONT_BEBAS(20.0f);
     agendaView.tag = 2;
     [_vista addSubview:agendaView];
+    
+    UIButton *buttonEvento2 = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 317, 114)];
+    [agendaView addSubview:buttonEvento2];
+    [buttonEvento2 addTarget:self action:@selector(detallesAgenda:) forControlEvents:UIControlEventTouchUpInside];
+    [buttonEvento2 setTag:[id_artist intValue]];
+    
     agendaView.alpha = 0.0;
     agendaView.transform =CGAffineTransformMakeScale(0,0);
     [UIView animateWithDuration:0.5 animations:^{
@@ -264,13 +366,13 @@
 
 #pragma mark - radial menu delegate methods
 - (NSInteger) numberOfItemsInRadialMenu:(ALRadialMenu *)radialMenu {
-    return 3;
+    return 2;
 }
 
 
 - (NSInteger) arcSizeForRadialMenu:(ALRadialMenu *)radialMenu {
     //Tamaño en grados de lo que ocupa el menu
-    return 65;
+    return 40;
 }
 
 
@@ -290,8 +392,6 @@
 			return [UIImage imageNamed:@"1_ACTUALIDAD"];
 		} else if (index == 2) {
 			return [UIImage imageNamed:@"1_AGENDA"];
-		} else if (index == 3) {
-			return [UIImage imageNamed:@"1_SORTEOS"];
 		}
         
 	}
@@ -319,13 +419,6 @@
             
             [self.navigationController pushViewController:agendaController animated:YES];
 			
-		} else if (index == 3) {
-            //Se hace click en el label de sorteos
-            
-            sorteosIndexViewController *sorteosController =
-            [storyboard instantiateViewControllerWithIdentifier:@"sorteosIndexViewController"];
-            
-            [self.navigationController pushViewController:sorteosController animated:YES];
 		}
 	}
 }
@@ -337,8 +430,163 @@
 - (IBAction)menuButton:(id)sender {
 }
 
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
+}
 
+- (IBAction)buscar:(id)sender {
+    _textViewBuscar.text = @"";
+    ultima_busqueda_planes = @"";
+    /*if(_scrollView.userInteractionEnabled){
+        _scrollView.userInteractionEnabled = FALSE;
+    }
+    else{
+        _scrollView.userInteractionEnabled = TRUE;
+    }*/
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 140;
+    newFrame.size.height = 54;
+    _viewBuscar.frame = newFrame;
+    if(_viewBuscar.hidden){
+        _viewBuscar.hidden = FALSE;
+    }
+    else{
+        _viewBuscar.hidden = TRUE;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            _viewBuscar.hidden = TRUE;
+        }
+    }
+    
+}
 
+- (BOOL)textFieldShouldReturn:(UITextField *)theTextField {
+    if (theTextField == self.textViewBuscar) {
+        [theTextField resignFirstResponder];
+    }
+    return YES;
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event{
+    //hides keyboard when another part of layout was touched
+    [self.view endEditing:YES];
+    [super touchesBegan:touches withEvent:event];
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+    _vista.userInteractionEnabled = TRUE;
+}
+
+- (IBAction)textFieldDidBeginEditing:(id)sender {
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 310;
+    [_vista bringSubviewToFront:_viewBuscar];
+    _viewBuscar.frame = newFrame;
+}
+
+- (IBAction)textFieldDidEndEditing:(UITextField *)sender
+{
+    if(![ultima_busqueda_planes isEqualToString:_textViewBuscar.text]){
+        [self buscar];
+        CGRect newFrame = _viewBuscar.frame;
+        newFrame.origin.y = DEVICE_SIZE.height - 270;
+        newFrame.size.height = 180;
+        _viewBuscar.frame = newFrame;
+    }
+}
+
+- (void) buscar
+{
+    sesion *s = [sesion sharedInstance];
+    if(![ultima_busqueda_planes isEqualToString:_textViewBuscar.text]){
+        ultima_busqueda_planes = _textViewBuscar.text;
+        [[articles_dao sharedInstance] search:s.codigo_conexion q:_textViewBuscar.text limit:@5 page:@0 y:^(NSArray *articles, NSError *error) {
+            if (!error) {
+                UIScrollView* scrollViewSearch = [[UIScrollView alloc] initWithFrame:CGRectMake(0, DEVICE_SIZE.height - 54 - 166, 320, 130)];
+                scrollViewSearch.tag = 50;
+                [scrollViewSearch setBackgroundColor: [UIColor colorWithRed:37.0/255.0f green:37.0/255.0f blue:37.0/255.0f alpha:1]];
+                int i = 0;
+                NSValue *irArtistas = [NSValue valueWithPointer:@selector(verArtista:)];
+                NSValue *irSitio = [NSValue valueWithPointer:@selector(verSitio:)];
+                NSValue *irSello = [NSValue valueWithPointer:@selector(verSello:)];
+                for (NSDictionary *JSONnoteData in articles) {
+                    [constructorVistas dibujarResultadoEnPosicion:JSONnoteData en:scrollViewSearch posicion:i selectorArtista:irArtistas selectorSitio:irSitio selectorSello:irSello controllerBase:self];
+                    i++;
+                    numero_resultados_planes++;
+                }
+                
+                [self autoWidthScrollView:scrollViewSearch];
+                [self.view addSubview:scrollViewSearch];
+                numero_resultados_planes = 0;
+                
+            } else {
+            }
+        }];
+    }
+}
+
+- (void) autoWidthScrollView:(UIScrollView*)scrollViewBusqueda{
+    CGFloat scrollViewWidth = 0.0f;
+    for (UIView* view in scrollViewBusqueda.subviews)
+    {
+        scrollViewWidth += view.frame.size.width+10;
+    }
+    [scrollViewBusqueda setContentSize:(CGSizeMake(scrollViewWidth, 130))];
+}
+
+-(void)verSitio:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sitio"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verSello:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sello"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verArtista:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Artist"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+    
+}
 /*
  #pragma mark - Navigation
  

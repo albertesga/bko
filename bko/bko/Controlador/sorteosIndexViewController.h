@@ -9,8 +9,10 @@
 #import <UIKit/UIKit.h>
 #import "ALRadialMenu.h"
 #import "ALRadialButton.h"
+#import "SWRevealViewController.h"
 
-@interface sorteosIndexViewController : UIViewController <ALRadialMenuDelegate>
+
+@interface sorteosIndexViewController : UIViewController <SWRevealViewControllerDelegate,ALRadialMenuDelegate,UITextFieldDelegate,UIGestureRecognizerDelegate>
 
 @property (strong, nonatomic) ALRadialMenu *radialMenu;
 @end

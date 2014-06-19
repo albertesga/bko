@@ -14,6 +14,11 @@
 #import "actualidadIndexViewController.h"
 #import "agendaIndexViewController.h"
 #import "sorteosIndexViewController.h"
+#import "sinConexionViewController.h"
+#import "articles_dao.h"
+#import "constructorVistas.h"
+#import "fichaViewController.h"
+#import "actualidadDetalleViewController.h"
 
 @interface sorteosIndexViewController ()
 @property (weak, nonatomic) IBOutlet UIBarButtonItem *menu_lateral_button;
@@ -23,6 +28,8 @@
 @property (weak, nonatomic) IBOutlet UIScrollView *scrollView;
 @property (weak, nonatomic) IBOutlet UIImageView *degradado_menu;
 @property (weak, nonatomic) IBOutlet UIButton *menu_button;
+@property (weak, nonatomic) IBOutlet UIView *viewBuscar;
+@property (weak, nonatomic) IBOutlet UITextField *textViewBuscar;
 @end
 
 @implementation sorteosIndexViewController
@@ -30,6 +37,9 @@
 int numero_sorteos = 0;
 #define limit_paginate ((int) 6)
 
+int numero_resultados_sorteos = 0;
+NSString* ultima_busqueda_sorteos = @"";
+#define DEVICE_SIZE [[[[UIApplication sharedApplication] keyWindow] rootViewController].view convertRect:[[UIScreen mainScreen] bounds] fromView:nil].size
 #define FONT_BEBAS(s) [UIFont fontWithName:@"BebasNeue" size:s]
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
@@ -44,37 +54,93 @@ int numero_sorteos = 0;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [self conectado];
     
     [self.menu_lateral_button setTarget: self.revealViewController];
     [self.menu_lateral_button setAction: @selector( rightRevealToggle: )];
-    [self.navigationController.navigationBar addGestureRecognizer: self.revealViewController.panGestureRecognizer];
-    self.revealViewController.rightViewRevealWidth = 118;
+    //[self.revealViewController panGestureRecognizer];
+    [self.revealViewController panGestureRecognizerToNul];
+    [self.revealViewController tapGestureRecognizer];
+    self.revealViewController.rightViewRevealWidth = 180;
+    self.revealViewController.delegate = self;
+    
+    [_viewBuscar setTranslatesAutoresizingMaskIntoConstraints:YES];
+    self.textViewBuscar.delegate=self;
+    
     sesion *s = [sesion sharedInstance];
     
     //Menu Radial
     self.radialMenu = [[ALRadialMenu alloc] init];
 	self.radialMenu.delegate = self;
-
+    
     NSNumber *desde = [NSNumber numberWithInteger:numero_sorteos];
     NSNumber *hasta = [NSNumber numberWithInteger:limit_paginate];
     [[raffle_dao sharedInstance] getRaffles:s.codigo_conexion limit:hasta page:desde y:^(NSArray *sorteos, NSError *error) {
         if (!error) {
-            for (NSDictionary *JSONnoteData in sorteos) {
-                NSLog(@"SORTEO %@",JSONnoteData);
-                [self showRaffle:JSONnoteData];
+            if([sorteos count]>0){
+                for (NSDictionary *JSONnoteData in sorteos) {
+                    [self showRaffle:JSONnoteData];
+                }
+            }
+            else{
+                UILabel *no_hay_sugerencias = [[UILabel alloc] initWithFrame:CGRectMake(20, 100, 280, 21)];
+                no_hay_sugerencias.font = FONT_BEBAS(16.0f);
+                no_hay_sugerencias.text = @"NO ESTÁS PARTICIPANDO EN NINGÚN SORTEO";
+                no_hay_sugerencias.textAlignment = NSTextAlignmentCenter;
+                no_hay_sugerencias.textColor = [UIColor colorWithRed:163.0/255.0f green:163.0/255.0f blue:163.0/255.0f alpha:1];
+                [_view_scroll addSubview:no_hay_sugerencias];
             }
             [self autoHeight];
         } else {
-            // Error processing
-            NSLog(@"Error al recoger parties places: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
+}
+
+-(void)viewDidAppear:(BOOL)animated{
+    NSInteger numberOfViewControllers = self.navigationController.viewControllers.count;
+    if ([[self.navigationController.viewControllers objectAtIndex:numberOfViewControllers - 2] isKindOfClass:[self class]]){
+        NSMutableArray *allControllers = [[NSMutableArray alloc] initWithArray:self.navigationController.viewControllers];
+        [allControllers removeObjectAtIndex:[allControllers count] - 2];
+        [self.navigationController setViewControllers:allControllers animated:NO];
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController willMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
+- (void)revealController:(SWRevealViewController *)revealController didMoveToPosition:(FrontViewPosition)position
+{
+    if(position == FrontViewPositionLeft) {
+        self.view.userInteractionEnabled = YES;
+    } else {
+        self.view.userInteractionEnabled = NO;
+    }
+}
+
+- (void)viewWillDisappear:(BOOL)animated{
+    if(!_degradado_menu.hidden){
+        [self.radialMenu buttonsWillAnimateFromButton:_menu_button withFrame:self.menu_button.frame inView:self.view];
+        [UIView transitionWithView:_degradado_menu
+                          duration:0.8
+                           options:
+         UIViewAnimationOptionTransitionCrossDissolve
+                        animations:NULL
+                        completion:NULL];
+        _degradado_menu.hidden = true;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==1 || [v tag]==50){
+            [v removeFromSuperview];
+        }
+    }
+    _viewBuscar.hidden = TRUE;
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -84,10 +150,14 @@ int numero_sorteos = 0;
 
 - (void) showRaffle:(NSDictionary*)json{
     //Las UIViews de cada
-    UIView *contenedorView=[[UIView alloc]initWithFrame:CGRectMake(12, numero_sorteos*320 + 10, 297, 290)];
+    int scrollViewHeight = 0;
+    for (UIView* v in _view_scroll.subviews){
+        scrollViewHeight += v.frame.size.height +10;
+    }
+    UIView *contenedorView=[[UIView alloc]initWithFrame:CGRectMake(12, scrollViewHeight + 10 , 297, 290)];
     numero_sorteos++;
     [contenedorView setBackgroundColor:[UIColor whiteColor]];
-    [_scrollView addSubview:contenedorView];
+    [_view_scroll addSubview:contenedorView];
     
     UILabel *tituloSorteos = [[UILabel alloc] initWithFrame:CGRectMake(10, 12, 277, 21)];
     [contenedorView addSubview:tituloSorteos];
@@ -116,11 +186,17 @@ int numero_sorteos = 0;
         listaGanadores.font = FONT_BEBAS(15.0f);
         listaGanadores.textAlignment=NSTextAlignmentCenter;
 
-        [self showCountdown:contenedorView forDate:[utils stringToDate:[[json valueForKey:@"party"] valueForKey:@"date"]]];
+        [self showCountdown:contenedorView forDate:[utils stringToDateFormatoBarras:[json valueForKey:@"finish_date"]]];
     }
     else {
         UIImageView *imagen_has_ganado = [[UIImageView alloc] initWithFrame:CGRectMake(164, 107, 123, 73)];
-        [imagen_has_ganado setImage:[UIImage imageNamed:@"7_icon_PREMIADO.png"]];
+        if([[json objectForKey:@"is_winner"] boolValue]){
+            [imagen_has_ganado setImage:[UIImage imageNamed:@"7_icon_PREMIADO.png"]];
+        }
+        else{
+            [imagen_has_ganado setImage:[UIImage imageNamed:@"7_icon_NO_PREMIADO.png"]];
+        }
+        
         [contenedorView addSubview:imagen_has_ganado];
         UILabel *ganadores = [[UILabel alloc] initWithFrame:CGRectMake(24, 188, 248, 21)];
         [contenedorView addSubview:ganadores];
@@ -135,9 +211,9 @@ int numero_sorteos = 0;
         separador_ganador.textColor=[UIColor blackColor];
         separador_ganador.font = FONT_BEBAS(15.0f);
         separador_ganador.textAlignment=NSTextAlignmentCenter;
-        int y = 218;
+        int y = 216;
         for(NSDictionary* j in [json objectForKey:@"winners"]){
-            UILabel *primer_ganador = [[UILabel alloc] initWithFrame:CGRectMake(24, y, 248, 21)];
+            UILabel *primer_ganador = [[UILabel alloc] initWithFrame:CGRectMake(24, y-2, 248, 21)];
             [contenedorView addSubview:primer_ganador];
             primer_ganador.text=[j valueForKey:@"name"];
             primer_ganador.textColor=[UIColor blackColor];
@@ -153,23 +229,22 @@ int numero_sorteos = 0;
             y = y +30;
         }
         
-        /*NSNumberFormatter * f = [[NSNumberFormatter alloc] init];
-        [f setNumberStyle:NSNumberFormatterDecimalStyle];
-        NSNumber *id_artist =[f numberFromString:[json objectForKey:@"id"]];
-        [buttonActualidad setTag:[id_artist intValue]];*/
         
-        UIImageView *desliza_para_eliminar = [[UIImageView alloc] initWithFrame:CGRectMake(15, y+20, 268, 28)];
-        [desliza_para_eliminar setImage:[UIImage imageNamed:@"7_button_DESLIZA_ELIMINAR.png"]];
-        [contenedorView addSubview:desliza_para_eliminar];
-        UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(desliza_eliminar:)];
-        [swipeRight setDirection:UISwipeGestureRecognizerDirectionRight];
-        [desliza_para_eliminar addGestureRecognizer:swipeRight];
-        desliza_para_eliminar.userInteractionEnabled=YES;
         
         CGRect newFrame = contenedorView.frame;
         
         newFrame.size.height = y+60;
         [contenedorView setFrame:newFrame];
+        
+        UISwipeGestureRecognizer *recognizer = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(desliza_eliminar:)];
+        [recognizer setDirection:UISwipeGestureRecognizerDirectionRight];
+        recognizer.delegate = self;
+        UIImageView *desliza_para_eliminar = [[UIImageView alloc] initWithFrame:CGRectMake(15, y+20, 268, 28)];
+        [desliza_para_eliminar setImage:[UIImage imageNamed:@"7_button_DESLIZA_ELIMINAR.png"]];
+        [contenedorView addSubview:desliza_para_eliminar];
+        desliza_para_eliminar.userInteractionEnabled=YES;
+        [desliza_para_eliminar addGestureRecognizer:recognizer];
+        
     }
     
     [self autoHeight];
@@ -177,29 +252,52 @@ int numero_sorteos = 0;
 
 - (void) autoHeight{
     CGFloat scrollViewHeight = 0.0f;
-    for (UIView* view in _scrollView.subviews)
+    
+    for (UIView* view in _view_scroll.subviews)
     {
         scrollViewHeight += view.frame.size.height;
     }
-    [_scrollView setContentSize:(CGSizeMake(320, scrollViewHeight))];
+    self.altura_scroll.constant = scrollViewHeight + 30;
+    
 }
 
 
-- (void)desliza_eliminar:(UISwipeGestureRecognizer *)swipe {
+- (void) desliza_eliminar:(UISwipeGestureRecognizer *)swipe {
+
     sesion *s = [sesion sharedInstance];
     NSNumber *n = [[NSNumber alloc] initWithInt:swipe.view.tag];
+    
+    // animate the sliding of them into place
+    
+    [UIView transitionWithView:swipe.view 
+                      duration:0.5
+                       options:UIViewAnimationOptionTransitionFlipFromRight
+                    animations:^{
+                        //existingLabel.text = newText;
+                    }
+                    completion:nil];
+    
     [[raffle_dao sharedInstance] deleteParticipant:s.codigo_conexion item_id:n y:^(NSArray *sorteos, NSError *error) {
         if (!error) {
-            
+            for (UIView* view in _view_scroll.subviews)
+            {
+                [view removeFromSuperview];
+            }
+            numero_sorteos = 0;
+            NSNumber *desde = [NSNumber numberWithInteger:numero_sorteos];
+            NSNumber *hasta = [NSNumber numberWithInteger:limit_paginate];
+            [[raffle_dao sharedInstance] getRaffles:s.codigo_conexion limit:hasta page:desde y:^(NSArray *sorteos, NSError *error) {
+                if (!error) {
+                    for (NSDictionary *JSONnoteData in sorteos) {
+                        [self showRaffle:JSONnoteData];
+                    }
+                    [self autoHeight];
+                } else {
+                    [utils controlarErrores:error];
+                }
+            }];
         } else {
-            // Error processing
-            NSLog(@"Error al recoger parties places: %@", error);
-            UIAlertView *theAlert = [[UIAlertView alloc] initWithTitle:@"Error"
-                                                               message:[error localizedDescription]
-                                                              delegate:self
-                                                     cancelButtonTitle:@"OK"
-                                                     otherButtonTitles:nil];
-            [theAlert show];
+            [utils controlarErrores:error];
         }
     }];
 }
@@ -208,11 +306,12 @@ int numero_sorteos = 0;
 {
     
     NSCalendar *gregorian = [[NSCalendar alloc] initWithCalendarIdentifier:NSGregorianCalendar];
-     NSUInteger unitFlags = NSDayCalendarUnit | NSHourCalendarUnit | NSMinuteCalendarUnit;
-     NSDateComponents *components = [gregorian components:unitFlags fromDate:[NSDate date] toDate:fecha options:0];
-     NSInteger day = [components day];
-     NSInteger hour = [components hour];
-     NSInteger minute = [components minute];
+    NSUInteger unitFlags = NSDayCalendarUnit | NSHourCalendarUnit | NSMinuteCalendarUnit;
+    NSDateComponents *components = [gregorian components:unitFlags fromDate:[NSDate date] toDate:fecha options:0];
+    
+    NSInteger day = [components day];
+    NSInteger hour = [components hour];
+    NSInteger minute = [components minute];
     NSString *digitoS1 = @"0";
     NSString *digitoS2 = @"0";
     NSString *digitoS3 = @"0";
@@ -243,7 +342,6 @@ int numero_sorteos = 0;
         minute = minute/10;
         digitoS5 = [NSString stringWithFormat: @"%d", minute % 10];
     }
-    
     UIView *contenedorView=[[UIView alloc]initWithFrame:CGRectMake(60, 212, 174, 70)];
     [contenedorView setBackgroundColor:[UIColor whiteColor]];
     [contenedor addSubview:contenedorView];
@@ -261,7 +359,6 @@ int numero_sorteos = 0;
     UILabel *digito2 = [[UILabel alloc] initWithFrame:CGRectMake(33, 29, 25, 32)];
     [contenedorView addSubview:digito2];
     digito2.text=digitoS2;
-    NSLog(@"DIGITO 2 %@",digitoS2);
     digito2.textColor=[UIColor whiteColor];
     digito2.font = FONT_BEBAS(30.0f);
     digito2.textAlignment=NSTextAlignmentCenter;
@@ -279,7 +376,6 @@ int numero_sorteos = 0;
     digito4.textColor=[UIColor whiteColor];
     digito4.font = FONT_BEBAS(30.0f);
     digito4.textAlignment=NSTextAlignmentCenter;
-    NSLog(@"DIGITO 4 %@",digitoS4);
     
     UILabel *digito5 = [[UILabel alloc] initWithFrame:CGRectMake(118, 29, 25, 32)];
     [contenedorView addSubview:digito5];
@@ -356,13 +452,13 @@ int numero_sorteos = 0;
 
 #pragma mark - radial menu delegate methods
 - (NSInteger) numberOfItemsInRadialMenu:(ALRadialMenu *)radialMenu {
-    return 3;
+    return 2;
 }
 
 
 - (NSInteger) arcSizeForRadialMenu:(ALRadialMenu *)radialMenu {
     //Tamaño en grados de lo que ocupa el menu
-    return 65;
+    return 40;
 }
 
 
@@ -382,8 +478,6 @@ int numero_sorteos = 0;
 			return [UIImage imageNamed:@"1_ACTUALIDAD"];
 		} else if (index == 2) {
 			return [UIImage imageNamed:@"1_AGENDA"];
-		} else if (index == 3) {
-			return [UIImage imageNamed:@"1_SORTEOS"];
 		}
         
 	}
@@ -411,13 +505,6 @@ int numero_sorteos = 0;
             
             [self.navigationController pushViewController:agendaController animated:YES];
 			
-		} else if (index == 3) {
-            //Se hace click en el label de sorteos
-            
-            sorteosIndexViewController *sorteosController =
-            [storyboard instantiateViewControllerWithIdentifier:@"sorteosIndexViewController"];
-            
-            [self.navigationController pushViewController:sorteosController animated:YES];
 		}
 	}
 }
@@ -429,6 +516,161 @@ int numero_sorteos = 0;
 - (IBAction)menuButton:(id)sender {
 }
 
+-(void)conectado{
+    if(![utils connected]){
+        UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"                                           bundle:nil];
+        sinConexionViewController *sinConexion =
+        [storyboard instantiateViewControllerWithIdentifier:@"sinConexionViewController"];
+        [self presentViewController:sinConexion animated:NO completion:nil];
+    }
+}
+
+- (IBAction)buscar:(id)sender {
+    _textViewBuscar.text = @"";
+    ultima_busqueda_sorteos = @"";
+    if(_scrollView.userInteractionEnabled){
+        _scrollView.userInteractionEnabled = FALSE;
+    }
+    else{
+        _scrollView.userInteractionEnabled = TRUE;
+    }
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 140;
+    newFrame.size.height = 54;
+    _viewBuscar.frame = newFrame;
+    if(_viewBuscar.hidden){
+        _viewBuscar.hidden = FALSE;
+    }
+    else{
+        _viewBuscar.hidden = TRUE;
+    }
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==50){
+            [v removeFromSuperview];
+            _viewBuscar.hidden = TRUE;
+        }
+    }
+    
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)theTextField {
+    if (theTextField == self.textViewBuscar) {
+        [theTextField resignFirstResponder];
+    }
+    return YES;
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event{
+    //hides keyboard when another part of layout was touched
+    [self.view endEditing:YES];
+    [super touchesBegan:touches withEvent:event];
+    for (UIView* v in [self.view subviews]){
+        if ([v tag]==5){
+            [v removeFromSuperview];
+            
+        }
+    }
+    _viewBuscar.hidden = TRUE;
+    _scrollView.userInteractionEnabled = TRUE;
+}
+
+- (IBAction)textFieldDidBeginEditing:(id)sender {
+    CGRect newFrame = _viewBuscar.frame;
+    newFrame.origin.y = DEVICE_SIZE.height - 310;
+    _viewBuscar.frame = newFrame;
+}
+
+- (IBAction)textFieldDidEndEditing:(UITextField *)sender
+{
+    if(![ultima_busqueda_sorteos isEqualToString:_textViewBuscar.text]){
+        [self buscar];
+        CGRect newFrame = _viewBuscar.frame;
+        newFrame.origin.y = DEVICE_SIZE.height - 270;
+        newFrame.size.height = 180;
+        _viewBuscar.frame = newFrame;
+    }
+}
+
+- (void) buscar
+{
+    sesion *s = [sesion sharedInstance];
+    if(![ultima_busqueda_sorteos isEqualToString:_textViewBuscar.text]){
+        ultima_busqueda_sorteos = _textViewBuscar.text;
+        [[articles_dao sharedInstance] search:s.codigo_conexion q:_textViewBuscar.text limit:@5 page:@0 y:^(NSArray *articles, NSError *error) {
+            if (!error) {
+                UIScrollView* scrollViewSearch = [[UIScrollView alloc] initWithFrame:CGRectMake(0, DEVICE_SIZE.height - 54 - 166, 320, 130)];
+                scrollViewSearch.tag = 50;
+                [scrollViewSearch setBackgroundColor: [UIColor colorWithRed:37.0/255.0f green:37.0/255.0f blue:37.0/255.0f alpha:1]];
+                int i = 0;
+                NSValue *irArtistas = [NSValue valueWithPointer:@selector(verArtista:)];
+                NSValue *irSitio = [NSValue valueWithPointer:@selector(verSitio:)];
+                NSValue *irSello = [NSValue valueWithPointer:@selector(verSello:)];
+                for (NSDictionary *JSONnoteData in articles) {
+                    [constructorVistas dibujarResultadoEnPosicion:JSONnoteData en:scrollViewSearch posicion:i selectorArtista:irArtistas selectorSitio:irSitio selectorSello:irSello controllerBase:self];
+                    i++;
+                    numero_resultados_sorteos++;
+                }
+                
+                [self autoWidthScrollView:scrollViewSearch];
+                [self.view addSubview:scrollViewSearch];
+                numero_resultados_sorteos = 0;
+                
+            } else {
+            }
+        }];
+    }
+}
+
+- (void) autoWidthScrollView:(UIScrollView*)scrollViewBusqueda{
+    CGFloat scrollViewWidth = 0.0f;
+    for (UIView* view in scrollViewBusqueda.subviews)
+    {
+        scrollViewWidth += view.frame.size.width+10;
+    }
+    [scrollViewBusqueda setContentSize:(CGSizeMake(scrollViewWidth, 130))];
+}
+
+-(void)verSitio:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sitio"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verSello:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Sello"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
+
+-(void)verArtista:(UIButton*)sender
+{
+    UIStoryboard* storyboard = [UIStoryboard storyboardWithName:@"Main"
+                                                         bundle:nil];
+    fichaViewController *fichaController =
+    [storyboard instantiateViewControllerWithIdentifier:@"fichaViewController"];
+    NSInteger id_art = sender.tag;
+    fichaController.id_card = id_art;
+    fichaController.kind = [utils getKind:@"Artist"];
+    [self.navigationController setNavigationBarHidden:NO];
+    [self.navigationController pushViewController:fichaController animated:YES ];
+    
+}
 
 
 /*
