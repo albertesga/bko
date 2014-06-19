@@ -22,4 +22,5 @@ typedef void (^FetchArticlesCompletionBlock)(NSArray *notes, NSError *error);
 - (void)getCard:(NSString *)connection_code kind:(NSNumber *)kind item_id:(NSNumber *)item_id y:(FetchArticlesCompletionBlock)completionBlock;
 - (void)getArtistsSuggestions:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock;
 - (void)getPlacesSuggestions:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock;
+- (void)search:(NSString *)code_connection q:(NSString *)q limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock;
 @end

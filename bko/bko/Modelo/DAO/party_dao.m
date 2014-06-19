@@ -123,9 +123,7 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
     if(connection_code!=nil){
         [parameters setObject:connection_code forKey:@"connection_code"];
     }
-    NSLog(@"PARAMS %@",parameters);
     [self GET:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
-        NSLog(@"RESPONSE %@",responseObject);
         if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
             NSArray *connection = [[NSArray alloc] initWithObjects:[responseObject objectForKey:@"party"], nil];
             completionBlock(connection, nil);
@@ -152,9 +150,7 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
     if(connection_code!=nil){
         [parameters setObject:connection_code forKey:@"connection_code"];
     }
-    NSLog(@"PARAM %@",parameters);
     [self GET:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
-        NSLog(@"RESPONSE %@",responseObject);
         if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
             NSArray *connection = [[NSArray alloc] initWithObjects:[responseObject objectForKey:@"success"], nil];
             completionBlock(connection, nil);
@@ -209,10 +205,8 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
         NSString *stringFromDate = [formatter stringFromDate:date];
         [parameters setObject:stringFromDate forKey:@"year_month"];
     }
-    NSLog(@"PARAMETROS %@",parameters);
     [self GET:path parameters:parameters
       success:^(NSURLSessionDataTask *task, id responseObject) {
-          NSLog(@"PLACES %@",responseObject);
           if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
               completionBlock([responseObject objectForKey:@"places"], nil);
           }
@@ -226,6 +220,34 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
           completionBlock(nil, error);
       }];
     
+}
+
+- (void)getTickets:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchPartiesCompletionBlock)completionBlock{
+    NSString *path = [NSString stringWithFormat:@"getTickets"];
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(code_connection!=nil){
+        [parameters setObject:code_connection forKey:@"connection_code"];
+    }
+    if(limit!=nil){
+        [parameters setObject:limit forKey:@"limit"];
+    }
+    if(page!=nil){
+        [parameters setObject:page forKey:@"page"];
+    }
+    [self GET:path parameters:parameters
+      success:^(NSURLSessionDataTask *task, id responseObject) {
+          if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+              completionBlock([responseObject objectForKey:@"tickets"], nil);
+          }
+          else{
+              int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+              NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+              completionBlock(nil, error);
+          }
+      }
+      failure:^(NSURLSessionDataTask *task, NSError *error) {
+          completionBlock(nil, error);
+      }];
 }
 
 - (instancetype)initWithBaseURL:(NSURL *)url sessionConfiguration:(NSURLSessionConfiguration *)configuration

@@ -134,7 +134,7 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
     
 }
 
-- (void)login:(NSString *)email password:(NSString *)password token:(NSNumber *)token y:(FetchCompletionBlock)completionBlock{
+- (void)login:(NSString *)email password:(NSString *)password token:(NSString *)token y:(FetchCompletionBlock)completionBlock{
     NSString *path = [NSString stringWithFormat:@"login"];
     NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
     if(email!=nil){
@@ -151,15 +151,14 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
     if([s.longitude intValue] != [zero intValue]){
         [parameters setObject:s.longitude forKey:@"lng"];
     }
+    NSLog(@"TOKEN %@",token);
     if(token!=nil){
         [parameters setObject:token forKey:@"token"];
     }
     
     NSNumber* dev = [[NSNumber alloc] initWithInt:0];
     [parameters setObject:dev forKey:@"device"];
-    NSLog(@"PARAMS %@",parameters);
     [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
-        NSLog(@"RESPONSE %@",responseObject);
         NSDictionary *jsonDict = (NSDictionary *) responseObject;
         if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
             NSArray *connection = [[NSArray alloc] initWithObjects:jsonDict, nil];
@@ -175,6 +174,33 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
         completionBlock(nil, error);
     }];
     
+}
+
+- (void)recoverPassword:(NSString *)email name_surname:(NSString *)name_surname y:(FetchCompletionBlock)completionBlock{
+        NSString *path = [NSString stringWithFormat:@"recoverPassword"];
+        NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+        if(email!=nil){
+            [parameters setObject:email forKey:@"email"];
+        }
+        if(name_surname!=nil){
+            [parameters setValue:[name_surname stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding] forKey:@"name_surname"];
+        }
+
+        [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
+            NSDictionary *jsonDict = (NSDictionary *) responseObject;
+            if([[[jsonDict objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
+                NSArray *connection = [[NSArray alloc] initWithObjects:jsonDict, nil];
+                completionBlock(connection, nil);
+            }
+            else{
+                int id_error = (int)[[jsonDict objectForKey:@"response"] objectForKey:@"error"];
+                NSError *error = [NSError errorWithDomain:@"com.bkomagazine" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[jsonDict objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+                completionBlock(nil, error);
+            }
+            
+        } failure:^(NSURLSessionDataTask *task, NSError *error) {
+            completionBlock(nil, error);
+        }];
 }
 
 - (void)setCoordinates:(NSString *)connection_code latitude:(NSNumber *)latitude longitude:(NSNumber *)longitude y:(FetchCompletionBlock)completionBlock{

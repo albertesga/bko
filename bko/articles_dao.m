@@ -53,9 +53,10 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
         [parameters setObject:page forKey:@"page"];
     }
     NSString *path = [NSString stringWithFormat:@"getArticles"];
+    NSLog(@"PARAMETRES %@",parameters);
     [self GET:path parameters:parameters
       success:^(NSURLSessionDataTask *task, id responseObject) {
-          NSLog(@"");
+          NSLog(@"RESPONSE %@",responseObject);
           if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==FALSE){
               completionBlock([responseObject objectForKey:@"articles"], nil);
           }
@@ -80,7 +81,6 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
     if(connection_code!=nil){
         [parameters setObject:connection_code forKey:@"connection_code"];
     }
-    
     [self POST:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
         
         if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
@@ -118,11 +118,9 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
     if(page!=nil){
         [parameters setObject:page forKey:@"page"];
     }
-    NSLog(@" PARAMETROS %@",parameters);
     NSString *path = [NSString stringWithFormat:@"getRelatedItems"];
     [self GET:path parameters:parameters
       success:^(NSURLSessionDataTask *task, id responseObject) {
-          NSLog(@" RESPONSE %@",responseObject);
           if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
               completionBlock([responseObject objectForKey:@"related_items"], nil);
           }
@@ -176,9 +174,7 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
     if(kind!=nil){
         [parameters setObject:kind forKey:@"kind"];
     }
-    NSLog(@" PARAMS %@",parameters);
     [self GET:path parameters:parameters success:^(NSURLSessionDataTask *task, id responseObject) {
-        NSLog(@" RESPONSE %@",responseObject);
         if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==0){
             NSArray *connection = [[NSArray alloc] initWithObjects:[responseObject objectForKey:@"card"], nil];
             completionBlock(connection, nil);
@@ -251,6 +247,39 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
           completionBlock(nil, error);
       }];
 
+    
+}
+
+- (void)search:(NSString *)code_connection q:(NSString *)q limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchArticlesCompletionBlock)completionBlock{
+    NSMutableDictionary *parameters=[[NSMutableDictionary alloc] init];
+    if(code_connection!=nil){
+        [parameters setObject:code_connection forKey:@"connection_code"];
+    }
+    if(limit!=nil){
+        [parameters setObject:limit forKey:@"limit"];
+    }
+    if(q!=nil){
+        [parameters setObject:q forKey:@"q"];
+    }
+    if(page!=nil){
+        [parameters setObject:page forKey:@"page"];
+    }
+    NSString *path = [NSString stringWithFormat:@"search"];
+    [self GET:path parameters:parameters
+      success:^(NSURLSessionDataTask *task, id responseObject) {
+          if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==FALSE){
+              completionBlock([responseObject objectForKey:@"items"], nil);
+          }
+          else{
+              int id_error = (int)[[responseObject objectForKey:@"response"] objectForKey:@"error"];
+              NSError *error = [NSError errorWithDomain:@"com.bko" code:id_error userInfo:[NSDictionary dictionaryWithObject:[[responseObject objectForKey:@"response"] objectForKey:@"errorMessage"] forKey:NSLocalizedDescriptionKey]];
+              completionBlock(nil, error);
+          }
+      }
+      failure:^(NSURLSessionDataTask *task, NSError *error) {
+          completionBlock(nil, error);
+      }];
+    
     
 }
 

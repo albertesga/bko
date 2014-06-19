@@ -21,5 +21,5 @@ typedef void (^FetchPartiesCompletionBlock)(NSArray *parties, NSError *error);
 - (void)addPlan:(NSString *)connection_code item_id:(NSNumber *)item_id y:(FetchPartiesCompletionBlock)completionBlock;
 - (void)removePlan:(NSString *)connection_code item_id:(NSNumber *)item_id y:(FetchPartiesCompletionBlock)completionBlock;
 - (void)getPlans:(NSString *)code_connection date:(NSDate *)date y:(FetchPartiesCompletionBlock)completionBlock;
-
+- (void)getTickets:(NSString *)code_connection limit:(NSNumber *)limit page:(NSNumber *)page y:(FetchPartiesCompletionBlock)completionBlock;
 @end

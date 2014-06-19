@@ -101,11 +101,9 @@ static NSString * const daoEngineBaseURL = @"http://www.bkomagazine.com/web_serv
         [parameters setObject:code_connection forKey:@"connection_code"];
     }
     NSString *path = [NSString stringWithFormat:@"getUnreadMessagesCount"];
-    NSLog(@"PARAM %@ ",parameters);
     
     [self GET:path parameters:parameters
       success:^(NSURLSessionDataTask *task, id responseObject) {
-          NSLog(@"RESPONSE %@ ",responseObject);
           if([[[responseObject objectForKey:@"response"] objectForKey:@"error"] boolValue]==FALSE){
               NSArray *connection = [[NSArray alloc] initWithObjects:responseObject, nil];
               completionBlock(connection, nil);
